@@ -9,12 +9,6 @@ title: Deep Learning Based Stereo Matching Estimation
 
 [comment]: # "This is the standard layout for the project, but you can clean this and use your own template"
 
-
-[//]: # (Please refer the instructions in below URL for the configurations)
-[//]: # (https://projects.ce.pdn.ac.lk/docs/how-to-add-a-project)
-
-
-
 # Deep Learning Based Stereo Matching Estimation
 
 #### Team
