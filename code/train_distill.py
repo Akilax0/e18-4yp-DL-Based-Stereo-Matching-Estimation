@@ -120,8 +120,6 @@ print("start at epoch {}".format(start_epoch))
 
 
 
-
-
 def train():
     bestepoch = 0
     error = 100
@@ -180,6 +178,9 @@ def train():
 
 # train one sample
 def train_sample(sample, compute_metrics=False):
+
+    
+    
     model.train()
     imgL, imgR, disp_gt, disp_gt_low = sample['left'], sample['right'], sample['disparity'], sample['disparity_low']
     imgL = imgL.cuda()
@@ -188,12 +189,31 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests = model(imgL, imgR)
+    disp_ests,s_feat = model(imgL, imgR)
+    print("Student feature map 1/4: ",s_feat.size())
+
+    with torch.no_grad():
+        # evaluate mode on teacher
+        t_model.eval()
+        # teacher disp ests
+        t_disp_ests,t_feat = t_model(imgL,imgR)
+    
+    print("Teacher feature map 1/4: ",t_feat.size() )
+
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
     disp_gts = [disp_gt, disp_gt_low] 
+
     loss = model_loss_train(disp_ests, disp_gts, masks)
+    
+    #teacher model modifications
+    # tloss = acv_model_loss_test(t_disp_ests,disp_gt,mask)
+    # loss = loss + tloss 
+
+    
+    
+    
     disp_ests_final = [disp_ests[0]]
 
     scalar_outputs = {"loss": loss}

@@ -177,27 +177,27 @@ class ACVNet(nn.Module):
 
             features_left = self.feature_extraction(left)
             features_right = self.feature_extraction(right)
-            print("feature left:",features_left['gwc_feature'].size())
+            # print("feature left:",features_left['gwc_feature'].size())
 
             gwc_volume = build_gwc_volume(features_left["gwc_feature"], features_right["gwc_feature"], self.maxdisp // 4, self.num_groups)
-            print("inital gwc_volume",gwc_volume.size())
+            # print("inital gwc_volume",gwc_volume.size())
             gwc_volume = self.patch(gwc_volume)
-            print("gwc_volume after patch",gwc_volume.size())
+            # print("gwc_volume after patch",gwc_volume.size())
 
             patch_l1 = self.patch_l1(gwc_volume[:, :8])
-            print("patch_l1",patch_l1.size())
+            # print("patch_l1",patch_l1.size())
             patch_l2 = self.patch_l2(gwc_volume[:, 8:24])
-            print("patch_l2",patch_l2.size())
+            # print("patch_l2",patch_l2.size())
             patch_l3 = self.patch_l3(gwc_volume[:, 24:40])
-            print("patch_l3",patch_l3.size())
+            # print("patch_l3",patch_l3.size())
 
             patch_volume = torch.cat((patch_l1,patch_l2,patch_l3), dim=1)
-            print("patch_volume",patch_volume.size())
+            # print("patch_volume",patch_volume.size())
 
             cost_attention = self.dres1_att_(patch_volume)
             cost_attention = self.dres2_att_(cost_attention)
             att_weights = self.classif_att_(cost_attention)
-            print("attention weights",att_weights.size())
+            # print("attention weights",att_weights.size())
 
         if not self.attn_weights_only:
 
@@ -247,7 +247,7 @@ class ACVNet(nn.Module):
             return [pred_attention]
 
         else:
-
+            # print("ACV not in training")
             if self.attn_weights_only:
 
                 cost_attention = F.upsample(att_weights, [self.maxdisp, left.size()[2], left.size()[3]], mode='trilinear')
@@ -262,7 +262,8 @@ class ACVNet(nn.Module):
             pred2 = F.softmax(cost2, dim=1)
             pred2 = disparity_regression(pred2, self.maxdisp)
 
-            return [pred2]
+            # modified to output left feature map
+            return [pred2],features_left['gwc_feature']
 
 def acv(d):
     return ACVNet(d)

@@ -226,6 +226,7 @@ class CGI_Stereo(nn.Module):
 
         features_left[0] = torch.cat((features_left[0], stem_4x), 1)
         features_right[0] = torch.cat((features_right[0], stem_4y), 1)
+        # print("feature map 1/4 : ",features_left[0].size())
 
 
         match_left = self.desc(self.conv(features_left[0]))
@@ -249,7 +250,8 @@ class CGI_Stereo(nn.Module):
 
 
         if self.training:
-            return [pred_up*4, pred.squeeze(1)*4]
+            # changing to output feature map 1/4
+            return [pred_up*4, pred.squeeze(1)*4],features_left[0]
 
         else:
             return [pred_up*4]
