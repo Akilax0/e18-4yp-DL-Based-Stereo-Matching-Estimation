@@ -261,6 +261,10 @@ def test_sample(sample, compute_metrics=True):
 
     return tensor2float(loss), tensor2float(scalar_outputs)
 
+def align():
+    # Given two tensors of different channel numbers 
+    # alogn the two with a 1x1 kernel
+    return 0
 
 if __name__ == '__main__':
     train()
