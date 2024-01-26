@@ -119,7 +119,6 @@ t_model.load_state_dict(t_state_dict['model'])
 print("start at epoch {}".format(start_epoch))
 
 
-
 def train():
     bestepoch = 0
     error = 100
