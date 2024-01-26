@@ -172,11 +172,18 @@ class hourglass_fusion(nn.Module):
 
         conv1 = torch.cat((conv2_up, conv1), dim=1)
         conv1 = self.agg_1(conv1)
+        
+        # to be used for distillation
+        # for starter we shall take conv1 and conv
+        # later check suitable position before or after CGF
 
         conv1 = self.CGF_8(conv1, imgs[1])
-        conv = self.conv1_up(conv1)
+        # print("conv1 after CGF ",conv1.size())
 
-        return conv
+        conv = self.conv1_up(conv1)
+        # print("conv last",conv.size())
+
+        return conv,conv1
 
 
 class CGI_Stereo(nn.Module):
@@ -236,7 +243,7 @@ class CGI_Stereo(nn.Module):
         corr_volume = self.corr_stem(corr_volume)
         feat_volume = self.semantic(features_left[0]).unsqueeze(2)
         volume = self.agg(feat_volume * corr_volume)
-        cost = self.hourglass_fusion(volume, features_left)
+        cost,conv8= self.hourglass_fusion(volume, features_left)
 
         xspx = self.spx_4(features_left[0])
         xspx = self.spx_2(xspx, stem_2x)
@@ -250,8 +257,8 @@ class CGI_Stereo(nn.Module):
 
 
         if self.training:
-            # changing to output feature map 1/4
-            return [pred_up*4, pred.squeeze(1)*4],features_left[0]
+            # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
+            return [pred_up*4, pred.squeeze(1)*4],features_left[0],volume,cost,conv8
 
         else:
             return [pred_up*4]

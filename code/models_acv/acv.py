@@ -88,7 +88,7 @@ class hourglass(nn.Module):
         conv4 = self.attention_block(conv4)
         conv5 = F.relu(self.conv5(conv4) + self.redir2(conv2), inplace=True)
         conv6 = F.relu(self.conv6(conv5) + self.redir1(x), inplace=True)
-        return conv6
+        return conv6,conv5
 
 class ACVNet(nn.Module):
     def __init__(self, maxdisp, attn_weights_only, freeze_attn_weights):
@@ -170,7 +170,9 @@ class ACVNet(nn.Module):
                 patch_l3 = self.patch_l3(gwc_volume[:, 24:40])
                 patch_volume = torch.cat((patch_l1,patch_l2,patch_l3), dim=1)
                 cost_attention = self.dres1_att_(patch_volume)
-                cost_attention = self.dres2_att_(cost_attention)
+
+                # ignore second hourglass output KD
+                cost_attention,_ = self.dres2_att_(cost_attention)
                 att_weights = self.classif_att_(cost_attention)
 
         else:
@@ -195,7 +197,9 @@ class ACVNet(nn.Module):
             # print("patch_volume",patch_volume.size())
 
             cost_attention = self.dres1_att_(patch_volume)
-            cost_attention = self.dres2_att_(cost_attention)
+
+            # ignore second hourglass output KD
+            cost_attention,_ = self.dres2_att_(cost_attention)
             att_weights = self.classif_att_(cost_attention)
             # print("attention weights",att_weights.size())
 
@@ -208,8 +212,11 @@ class ACVNet(nn.Module):
             ac_volume = F.softmax(att_weights, dim=2) * concat_volume   ### ac_volume = att_weights * concat_volume 
             cost0 = self.dres0(ac_volume)
             cost0 = self.dres1(cost0) + cost0
-            out1 = self.dres2(cost0)
-            out2 = self.dres3(out1)
+
+            # ignore second hourglass output KD
+            out1,_ = self.dres2(cost0)
+
+            out2,out2_1 = self.dres3(out1)
 
         if self.training:
 
@@ -262,8 +269,8 @@ class ACVNet(nn.Module):
             pred2 = F.softmax(cost2, dim=1)
             pred2 = disparity_regression(pred2, self.maxdisp)
 
-            # modified to output left feature map
-            return [pred2],features_left['gwc_feature']
+            # modified to output left feature map,cost volume, last 2 layers of deconv
+            return [pred2],features_left['gwc_feature'],ac_volume,out2,out2_1
 
 def acv(d):
     return ACVNet(d)

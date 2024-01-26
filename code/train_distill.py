@@ -188,16 +188,16 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_feat = model(imgL, imgR)
-    print("Student feature map 1/4: ",s_feat.size())
+    disp_ests,s_feat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
+    # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
     with torch.no_grad():
         # evaluate mode on teacher
         t_model.eval()
         # teacher disp ests
-        t_disp_ests,t_feat = t_model(imgL,imgR)
+        t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
     
-    print("Teacher feature map 1/4: ",t_feat.size() )
+    # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
@@ -209,8 +209,6 @@ def train_sample(sample, compute_metrics=False):
     #teacher model modifications
     # tloss = acv_model_loss_test(t_disp_ests,disp_gt,mask)
     # loss = loss + tloss 
-
-    
     
     
     disp_ests_final = [disp_ests[0]]
