@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 from datasets import __datasets__
 
 from models import __models__, model_loss_train, model_loss_test
-from models_acv import __tmodels__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
+from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 
 from utils import *
 from torch.utils.data import DataLoader
@@ -28,10 +28,12 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
+# Additional Args
 parser.add_argument('--t_model', default='acvnet', help='select a teacher model structure', choices=__models__.keys())
-parser.add_argument('--s_model', default='CGI_Stereo', help='select a student model structure', choices=__models__.keys())
-parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
+parser.add_argument('--t_loadckpt', default='./pretrained/acv_sceneflow.ckpt', help='load the weights from pretrained teacher')
 
+parser.add_argument('--model', default='CGI_Stereo', help='select a student model structure', choices=__models__.keys())
+parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
 parser.add_argument('--dataset', default='sceneflow', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default="/data/sceneflow/", help='data path')
 parser.add_argument('--trainlist', default='./filenames/sceneflow_train.txt', help='training list')
@@ -47,12 +49,10 @@ parser.add_argument('--batch_size', type=int, default=20, help='training batch s
 parser.add_argument('--test_batch_size', type=int, default=20, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
 parser.add_argument('--lrepochs', type=str, default="10,14,16,18:2", help='the epochs to decay lr: the downscale rate')
-
 parser.add_argument('--logdir', default='', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default='', help='load the weights from a specific checkpoint')
 parser.add_argument('--resume', action='store_true', help='continue training the model')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
-
 parser.add_argument('--summary_freq', type=int, default=20, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=1, help='the frequency of saving checkpoint')
 
@@ -73,11 +73,18 @@ test_dataset = StereoDataset(args.datapath, args.testlist, False)
 TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=8, drop_last=True)
 TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=4, drop_last=False)
 
+#STUDENT
 # model, optimizer
 model = __models__[args.model](args.maxdisp)
 model = nn.DataParallel(model)
 model.cuda()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))
+
+#TEACHER
+# model, optimizer
+t_model = __t_models__[args.t_model](args.maxdisp, False,False)
+t_model = nn.DataParallel(t_model)
+t_model.cuda()
 
 # load parameters
 start_epoch = 0
@@ -101,7 +108,18 @@ elif args.loadckpt:
     model_dict.update(pre_dict) 
     # model.load_state_dict(state_dict['model'])
     model.load_state_dict(model_dict)
+
+# Loading teacher model
+print("loading teacher model {}".format(args.t_loadckpt))
+t_state_dict = torch.load(args.t_loadckpt)
+print("state dict: ",t_state_dict.keys())
+t_model.load_state_dict(t_state_dict['model'])
+
+
 print("start at epoch {}".format(start_epoch))
+
+
+
 
 
 def train():
