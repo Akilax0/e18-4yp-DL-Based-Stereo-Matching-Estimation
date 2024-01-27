@@ -15,7 +15,7 @@ import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
 
-from models import __models__, model_loss_train, model_loss_test
+from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 
 from utils import *
@@ -177,9 +177,6 @@ def train():
 
 # train one sample
 def train_sample(sample, compute_metrics=False):
-
-    
-    
     model.train()
     imgL, imgR, disp_gt, disp_gt_low = sample['left'], sample['right'], sample['disparity'], sample['disparity_low']
     imgL = imgL.cuda()
@@ -189,7 +186,7 @@ def train_sample(sample, compute_metrics=False):
     optimizer.zero_grad()
 
     disp_ests,s_feat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
-    print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
+    # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -197,7 +194,7 @@ def train_sample(sample, compute_metrics=False):
         # teacher disp ests
         t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
     
-    print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
+    # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
     s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
@@ -205,10 +202,10 @@ def train_sample(sample, compute_metrics=False):
     s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
-    print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
-    print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
-    print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
-    print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
+    # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
+    # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
+    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
+    # print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
 
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
@@ -219,7 +216,18 @@ def train_sample(sample, compute_metrics=False):
     
     #teacher model modifications
     # tloss = acv_model_loss_test(t_disp_ests,disp_gt,mask)
-    # loss = loss + tloss 
+    # loss = loss + tloss
+
+    feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
+    # print("loss ",loss)
+    # print("feature loss ",feat_loss)
+    # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
+    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    
+
+    loss = loss + feat_loss
+    # print("loss sum ",loss)
     
     
     disp_ests_final = [disp_ests[0]]

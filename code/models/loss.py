@@ -14,3 +14,20 @@ def model_loss_test(disp_ests, disp_gts,img_masks):
     for disp_est, disp_gt, weight, mask_img in zip(disp_ests, disp_gts, weights, img_masks):
         all_losses.append(weight * F.l1_loss(disp_est[mask_img], disp_gt[mask_img], size_average=True))
     return sum(all_losses)
+
+def KD_feat_loss(student,teacher):
+    loss = F.mse_loss(student,teacher)
+    
+    return loss
+
+def KD_cvolume_loss(student,teacher):
+    
+    return 0
+
+def KD_deconv8(student,teacher):
+    
+    return 0
+
+def KD_deconv4(student,teacher):
+    
+    return 0
