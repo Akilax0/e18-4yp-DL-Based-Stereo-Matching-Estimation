@@ -21,13 +21,18 @@ def KD_feat_loss(student,teacher):
     return loss
 
 def KD_cvolume_loss(student,teacher):
+    loss = F.mse_loss(student,teacher)
     
-    return 0
+    return loss
+    
 
 def KD_deconv8(student,teacher):
+    loss = F.mse_loss(student,teacher)
     
-    return 0
+    return loss
+    
 
 def KD_deconv4(student,teacher):
+    loss = F.mse_loss(student,teacher)
     
-    return 0
+    return loss

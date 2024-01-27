@@ -213,20 +213,35 @@ def train_sample(sample, compute_metrics=False):
     disp_gts = [disp_gt, disp_gt_low] 
 
     loss = model_loss_train(disp_ests, disp_gts, masks)
+    # print("loss ",loss)
     
     #teacher model modifications
     # tloss = acv_model_loss_test(t_disp_ests,disp_gt,mask)
     # loss = loss + tloss
 
-    feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
-    # print("loss ",loss)
-    # print("feature loss ",feat_loss)
+    kd_loss = 0
+    feat_loss = 0
+    cvolume_loss =0
+    conv4_loss = 0 
+    conv8_loss = 0
+
+    # Uncomment as required
+
+    # feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+
+
+    kd_loss = kd_loss + feat_loss + cvolume_loss + conv4_loss + conv8_loss
+
+    # print("feature loss ",feat_loss)
+    # print("cvolume loss ",cvolume_loss)
+    # print("conv4 loss ",conv4_loss)
+    # print("conv8 loss ",conv8_loss)
     
 
-    loss = loss + feat_loss
+    loss = loss + kd_loss 
     # print("loss sum ",loss)
     
     

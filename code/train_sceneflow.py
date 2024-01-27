@@ -165,7 +165,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests = model(imgL, imgR)
+    disp_ests,_,_,_,_= model(imgL, imgR)
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
