@@ -189,7 +189,7 @@ def train_sample(sample, compute_metrics=False):
     optimizer.zero_grad()
 
     disp_ests,s_feat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
-    # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
+    print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -197,7 +197,18 @@ def train_sample(sample, compute_metrics=False):
         # teacher disp ests
         t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
     
-    # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
+    print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
+
+    s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
+    s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
+    
+    
+    print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
+    print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
+    print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
+    print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
 
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
@@ -259,10 +270,23 @@ def test_sample(sample, compute_metrics=True):
 
     return tensor2float(loss), tensor2float(scalar_outputs)
 
-def align():
+def align(student,student_channels,teacher_channels):
     # Given two tensors of different channel numbers 
-    # alogn the two with a 1x1 kernel
-    return 0
+    # align the two with a 1x1 kernel
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # print("student and teacher channels",student_channels, teacher_channels)
+    # print("Types: ",student.type())
+    if student_channels!= teacher_channels and len(student.size())==4:
+        m = nn.Conv2d(student_channels, teacher_channels, kernel_size=1, stride=1, padding=0).to(device)
+    elif student_channels!= teacher_channels and len(student.size())==5:
+        m = nn.Conv3d(student_channels, teacher_channels, kernel_size=(1,1,1), stride=1, padding=0).to(device)
+    else:
+        m = None
+        return student
+
+    return m(student)
 
 if __name__ == '__main__':
     train()
