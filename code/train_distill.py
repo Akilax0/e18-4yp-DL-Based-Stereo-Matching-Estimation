@@ -214,20 +214,16 @@ def train_sample(sample, compute_metrics=False):
 
     loss = model_loss_train(disp_ests, disp_gts, masks)
     # print("loss ",loss)
-    
-    #teacher model modifications
-    # tloss = acv_model_loss_test(t_disp_ests,disp_gt,mask)
-    # loss = loss + tloss
 
     kd_loss = 0
     feat_loss = 0
-    cvolume_loss =0
+    cvolume_loss = 0
     conv4_loss = 0 
     conv8_loss = 0
 
     # Uncomment as required
 
-    # feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
+    feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
@@ -239,9 +235,10 @@ def train_sample(sample, compute_metrics=False):
     # print("cvolume loss ",cvolume_loss)
     # print("conv4 loss ",conv4_loss)
     # print("conv8 loss ",conv8_loss)
-    
+    # print("loss",loss)
 
-    loss = loss + kd_loss 
+    loss = loss + 0.001*kd_loss
+    # loss = loss + kd_loss 
     # print("loss sum ",loss)
     
     
@@ -260,6 +257,7 @@ def train_sample(sample, compute_metrics=False):
     loss.backward()
     optimizer.step()
 
+    # Add knoledge distillation error here
     return tensor2float(loss), tensor2float(scalar_outputs)
 
 
