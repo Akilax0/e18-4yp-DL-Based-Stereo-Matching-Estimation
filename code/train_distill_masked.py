@@ -1,3 +1,12 @@
+'''
+
+
+Code for distilling knowledge with masks
+as in masked autoencoder paper
+
+
+'''
+
 from __future__ import print_function, division
 import argparse
 import os
@@ -15,7 +24,8 @@ import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
 
-from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+# adaptive decoder loaded here
+from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4,dec
 from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 
 from utils import *
@@ -196,10 +206,10 @@ def train_sample(sample, compute_metrics=False):
     
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
-    s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
-    #s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
-    # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
+    # s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
+    # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
@@ -223,13 +233,40 @@ def train_sample(sample, compute_metrics=False):
 
     # Uncomment as required
 
-    feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
+    # feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
-    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
-    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
 
-    kd_loss = kd_loss + 0.0001*feat_loss + cvolume_loss + 0.1*conv4_loss + 0.1*conv8_loss
+    '''
+
+    FPN used here. To be implemented on both teacher and student before 
+    adaptive decoder step.
+    
+
+    decoder step 
+
+
+    # Here FPN outputs are the feature maps or is this an extra operation for each considered
+    # point
+    stu_fpn = fpn(student)
+    tec_fpn = fpn(teacher)
+
+    stu_fpn = align(teacher,stu_fpn) 
+    
+    
+    mask = ? how to create this
+
+
+    stu_out = dec(stu_fpn,mask)
+    
+    loss  = distill_loss(tec_fpn,stu_fpn)
+    
+    '''
+
+
+    kd_loss = kd_loss + feat_loss + cvolume_loss + 0.01*conv4_loss + 0.01*conv8_loss
 
     # print("feature loss ",feat_loss)
     # print("cvolume loss ",cvolume_loss)
