@@ -2,8 +2,9 @@
 
 
 Code for distilling knowledge with masks
-as in masked autoencoder paper
 
+TBD on which implememntaion 
+1. Masked Generative Distillation
 
 '''
 
@@ -24,8 +25,10 @@ import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
 
-# adaptive decoder loaded here
-from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4,dec
+# # 
+from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+
+
 from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 
 from utils import *
@@ -206,10 +209,16 @@ def train_sample(sample, compute_metrics=False):
     
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
-    # s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
+    # channel numbers
+    # student_channels = s_feat.size()[1]
+    # teacher_channels = t_feat.size()[1]
+
+
+
+    s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
     # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
-    s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
+    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
@@ -230,13 +239,32 @@ def train_sample(sample, compute_metrics=False):
     cvolume_loss = 0
     conv4_loss = 0 
     conv8_loss = 0
+    
+    lambda_feat = 0.001
+    lambda_cvolume = 0 
+    lambda_conv4 = 0 
+    lambda_conv8 = 0 
+    
+    # using default value
+    # change according to usecase
+    # classificatio = 0.5
+    # semantic = 0.75
+    # detection / instance - 0.45
+    lambda_mgd = 0.45
 
     # Uncomment as required
 
     # feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
+    
+    # print("Original feature loss:  ",feat_loss)
+    # mgd loss    
+    feat_loss = get_dis_loss(preds_S=s_feat, preds_T=t_feat, student_channels=s_feat.size()[1] , teacher_channels=t_feat.size()[1], lambda_mgd=lambda_mgd)
+    # print("Masked feature loss:  ",feat_loss)
+    
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
-    conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
-    conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
+    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
 
     '''
@@ -266,7 +294,8 @@ def train_sample(sample, compute_metrics=False):
     '''
 
 
-    kd_loss = kd_loss + feat_loss + cvolume_loss + 0.01*conv4_loss + 0.01*conv8_loss
+    kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
+        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss
 
     # print("feature loss ",feat_loss)
     # print("cvolume loss ",cvolume_loss)
@@ -275,7 +304,6 @@ def train_sample(sample, compute_metrics=False):
     # print("loss",loss)
 
     loss = loss + kd_loss
-    # loss = loss + kd_loss 
     # print("loss sum ",loss)
     
     
@@ -332,7 +360,8 @@ def align(student,student_channels,teacher_channels):
     # Given two tensors of different channel numbers 
     # align the two with a 1x1 kernel
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = student.device
 
     # print("student and teacher channels",student_channels, teacher_channels)
     # print("Types: ",student.type())
@@ -345,6 +374,82 @@ def align(student,student_channels,teacher_channels):
         return student
 
     return m(student)
+
+def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
+
+
+    N, C, H, W = preds_T.shape
+
+    device = preds_S.device
+    
+    # print("device: " ,device)
+
+    generation = nn.Sequential(
+            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+
+
+    mat = torch.rand((N,C,1,1)).to(device) 
+    # print("matrix: " ,mat.size())
+
+    # mask generation
+    mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
+    # print("matrix: " ,mat.size())
+
+    # mask aligned student 
+    masked_feat = torch.mul(preds_S, mat)
+    # print("masked_feat: " ,masked_feat.size())
+    
+    # Genearate feature from student to be compared with teacher
+    new_feat = generation(masked_feat)
+    # print("New feat: " ,new_feat.size())
+
+    # calculate distilation loss
+    # check the implementation here for distillation loss
+    # dis_loss = loss_mse(new_feat, preds_T)/N
+    dis_loss = F.mse_loss(new_feat,preds_T)
+    # print("dis_loss : " ,dis_loss.size())
+
+    return dis_loss
+
+def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
+
+
+    N, C, D, H, W = preds_T.shape
+
+    device = preds_S.device
+    
+    # print("device: " ,device)
+
+    generation = nn.Sequential(
+            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+
+
+    mat = torch.rand((N,C,1,1,1)).to(device) 
+    # print("matrix: " ,mat.size())
+
+    # mask generation
+    mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
+    # print("matrix: " ,mat.size())
+
+    # mask aligned student 
+    masked_feat = torch.mul(preds_S, mat)
+    # print("masked_feat: " ,masked_feat.size())
+    
+    # Genearate feature from student to be compared with teacher
+    new_feat = generation(masked_feat)
+    # print("New feat: " ,new_feat.size())
+
+    # calculate distilation loss
+    # check the implementation here for distillation loss
+    # dis_loss = loss_mse(new_feat, preds_T)/N
+    dis_loss = F.mse_loss(new_feat,preds_T)
+    # print("dis_loss : " ,dis_loss)
+
+    return dis_loss
 
 if __name__ == '__main__':
     train()

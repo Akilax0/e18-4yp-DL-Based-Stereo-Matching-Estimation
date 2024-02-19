@@ -197,9 +197,9 @@ def train_sample(sample, compute_metrics=False):
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
-    #s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
-    # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
+    s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
@@ -224,12 +224,12 @@ def train_sample(sample, compute_metrics=False):
     # Uncomment as required
 
     feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
-    # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
-    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
-    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
+    conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
 
-    kd_loss = kd_loss + 0.0001*feat_loss + cvolume_loss + 0.1*conv4_loss + 0.1*conv8_loss
+    kd_loss = kd_loss + 0.001*feat_loss + 0.001*cvolume_loss + 0.001*conv4_loss + 0.001*conv8_loss
 
     # print("feature loss ",feat_loss)
     # print("cvolume loss ",cvolume_loss)
@@ -238,7 +238,6 @@ def train_sample(sample, compute_metrics=False):
     # print("loss",loss)
 
     loss = loss + kd_loss
-    # loss = loss + kd_loss 
     # print("loss sum ",loss)
     
     
