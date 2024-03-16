@@ -10,8 +10,6 @@ import gc
 import time
 import timm
 
-from .mgd import *
-
 class SubModule(nn.Module):
     def __init__(self):
         super(SubModule, self).__init__()
@@ -59,7 +57,8 @@ class Feature(SubModule):
         x8 = self.block2(x4)
         x16 = self.block3(x8)
         x32 = self.block4(x16)
-        return [x4, x8, x16, x32]
+        #return [x4, x8, x16, x32]  # mq
+        return [x2, x4, x8, x16, x32] # mq
 
 class FeatUp(SubModule):
     def __init__(self):
@@ -69,24 +68,34 @@ class FeatUp(SubModule):
         self.deconv16_8 = Conv2x(chans[3]*2, chans[2], deconv=True, concat=True)
         self.deconv8_4 = Conv2x(chans[2]*2, chans[1], deconv=True, concat=True)
         self.conv4 = BasicConv(chans[1]*2, chans[1]*2, kernel_size=3, stride=1, padding=1)
+        self.deconv4_2 = Conv2x(chans[1]*2, chans[0], deconv=True, concat=True)
+        self.conv2 = BasicConv(chans[0]*2, chans[0]*2, kernel_size=3, stride=1, padding=1)# check, mq
 
         self.weight_init()
 
     def forward(self, featL, featR=None):
-        x4, x8, x16, x32 = featL
+        x2, x4, x8, x16, x32 = featL
 
-        y4, y8, y16, y32 = featR
+        y2, y4, y8, y16, y32 = featR
         x16 = self.deconv32_16(x32, x16)
         y16 = self.deconv32_16(y32, y16)
         
         x8 = self.deconv16_8(x16, x8)
         y8 = self.deconv16_8(y16, y8)
+
         x4 = self.deconv8_4(x8, x4)
         y4 = self.deconv8_4(y8, y4)
         x4 = self.conv4(x4)
         y4 = self.conv4(y4)
 
-        return [x4, x8, x16, x32], [y4, y8, y16, y32]
+        x2 = self.deconv4_2(x4, x2)
+        y2 = self.deconv4_2(y4, y2)
+        x2 = self.conv2(x2)
+        y2 = self.conv2(y2)
+
+        #return [x4, x8, x16, x32], [y4, y8, y16, y32]
+
+        return [x2, x4, x8, x16, x32], [y2, y4, y8, y16, y32] #check, mq
 
 
 class Context_Geometry_Fusion(SubModule):
@@ -174,24 +183,19 @@ class hourglass_fusion(nn.Module):
 
         conv1 = torch.cat((conv2_up, conv1), dim=1)
         conv1 = self.agg_1(conv1)
-        
-        # to be used for distillation
-        # for starter we shall take conv1 and conv
-        # later check suitable position before or after CGF
 
         conv1 = self.CGF_8(conv1, imgs[1])
-        # print("conv1 after CGF ",conv1.size())
-
         conv = self.conv1_up(conv1)
-        # print("conv last",conv.size())
 
-        return conv,conv1
+        return conv
 
 
-class CGI_Stereo(nn.Module):
-    def __init__(self, maxdisp):
-        super(CGI_Stereo, self).__init__()
-        self.maxdisp = maxdisp 
+class Multimodal_CGI(nn.Module):
+    def __init__(self, k=2, maxdisp=256):
+        super(Multimodal_CGI, self).__init__()
+        self.maxdisp = maxdisp
+        self.k = k   # k-modal
+        self.var = 2
         self.feature = Feature()
         self.feature_up = FeatUp()
         chans = [16, 24, 32, 96, 160]
@@ -215,60 +219,111 @@ class CGI_Stereo(nn.Module):
             nn.BatchNorm2d(32), nn.ReLU()
             )
 
-        self.conv = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
-        self.desc = nn.Conv2d(48, 48, kernel_size=1, padding=0, stride=1)
-        self.semantic = nn.Sequential(
+        self.conv4 = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
+        self.desc4 = nn.Conv2d(48, 48, kernel_size=1, padding=0, stride=1)
+        self.semantic4 = nn.Sequential(
             BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
-        self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
-        self.hourglass_fusion = hourglass_fusion(8)
-        self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+        self.agg4 = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        self.hourglass_fusion4 = hourglass_fusion(8)
+        self.corr_stem4 = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+
+        self.conv2 = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
+        self.desc2 = nn.Conv2d(48, 48, kernel_size=1, padding=0, stride=1)
+        self.semantic2 = nn.Sequential(
+            BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
+        self.agg2 = BasicConv(8, 8, is_3d=True, kernel_size=(1, 5, 5), padding=(0, 2, 2), stride=1)
+        self.hourglass_fusion2 = hourglass_fusion(8)
+        self.corr_stem2 = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+
+        #CFNet related module
+        self.uniform_sampler = UniformSampler()
+        self.spatial_transformer = SpatialTransformer()
+
+    def find_bounds(self, prob):
+        max_probs, max_indices = torch.max(prob, dim=1)
+        left_bound = torch.zeros_like(max_indices)
+        right_bound = torch.zeros_like(max_indices)
+
+        #Traverse left to find left bound
+        for i in range(prob.size(2)):
+            left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+
+        # Traverse left to find left bound
+        for i in range(prob.size(2)-1, -1, -1):
+                right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[
+                    max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],
+                                                      right_bound[max_indices] + 1)
+        return max_probs, max_indices, left_bound, right_bound
+
+    def select_dominant_modal_disparity(self, prob_dist, disp_samples):
+        n, d, h, w = prob_dist.shape
+        _, d2, h2, w2 = disp_samples.shape
+
+        assert d==d2 and h==h2 and w==w2
+
+        cumulative_prob = torch.cumsum(prob_dist, dim=1)
+        max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
+
+        for i in range(w):
+            prob_dist[:, max_indices, :, torch.where(torch.arange(n).unsqueeze(1) == max_indices & ((torch.arange(w) < left_bound[max_indices].unsqueeze(1)) | (torch.arange(w) > right_bound.unsqueeze(1))), True, False)]=0.0
+
+        renormalized_prob = F.softmax(prob_dist, dim=1)
+
+        final_pred_disp = torch.sum(renormalized_prob * disp_samples, dim=1, keepdim=True)
+
+        return final_pred_disp
+
 
     def forward(self, left, right):
-
-        features_left = self.feature(left)
+        features_left = self.feature(left) #feature map @ [1/2, 1/4, 1/8, 1/16, 1/32] resolution
         features_right = self.feature(right)
         features_left, features_right = self.feature_up(features_left, features_right)
-        # Upscaled 4,8,16,32
-        ll = features_left
-        rl = features_right
-        
-        
-        stem_2x = self.stem_2(left)
-        stem_4x = self.stem_4(stem_2x)
+        stem_2x = self.stem_2(left) # 1/2
+        stem_4x = self.stem_4(stem_2x) #1/4
         stem_2y = self.stem_2(right)
         stem_4y = self.stem_4(stem_2y)
 
-        features_left[0] = torch.cat((features_left[0], stem_4x), 1)
-        features_right[0] = torch.cat((features_right[0], stem_4y), 1)
-        # print("feature map 1/4 : ",features_left[0].size())
+        features_left[0] = torch.cat((features_left[0], stem_2x), 1) #feature map at 1/2
+        features_right[0] = torch.cat((features_right[0], stem_2y), 1)
+        features_left[1] = torch.cat((features_left[1], stem_4x), 1) #feature map at 1/4
+        features_right[1] = torch.cat((features_right[1], stem_4y), 1)
 
 
-        match_left = self.desc(self.conv(features_left[0]))
-        match_right = self.desc(self.conv(features_right[0]))
+        match_left_4 = self.desc4(self.conv4(features_left[1]))
+        match_right_4 = self.desc4(self.conv4(features_right[1]))
 
-        corr_volume = build_norm_correlation_volume(match_left, match_right, self.maxdisp//4)
-        corr_volume = self.corr_stem(corr_volume)
-        feat_volume = self.semantic(features_left[0]).unsqueeze(2)
-        volume = self.agg(feat_volume * corr_volume)
-        cost,conv8= self.hourglass_fusion(volume, features_left)
+        corr_volume_4 = build_norm_correlation_volume(match_left_4, match_right_4, self.maxdisp//4)
+        corr_volume_4 = self.corr_stem4(corr_volume_4)
+        feat_volume_4 = self.semantic4(features_left[1]).unsqueeze(2)
+        volume_4 = self.agg4(feat_volume_4 * corr_volume_4)
 
-        xspx = self.spx_4(features_left[0])
+        _, *features_left_v2 = features_left
+        cost_4 = self.hourglass_fusion4(volume_4, features_left_v2)
+
+        xspx = self.spx_4(features_left[1])
         xspx = self.spx_2(xspx, stem_2x)
         spx_pred = self.spx(xspx)
         spx_pred = F.softmax(spx_pred, 1)
 
-        disp_samples = torch.arange(0, self.maxdisp//4, dtype=cost.dtype, device=cost.device)
-        disp_samples = disp_samples.view(1, self.maxdisp//4, 1, 1).repeat(cost.shape[0],1,cost.shape[3],cost.shape[4])
-        pred = regression_topk(cost.squeeze(1), disp_samples, 2)
-        pred_up = context_upsample(pred, spx_pred)
+        disp_samples_4 = torch.arange(0, self.maxdisp//4, dtype=cost_4.dtype, device=cost_4.device) #(48,)
+        disp_samples_4 = disp_samples_4.view(1, self.maxdisp//4, 1, 1).repeat(cost_4.shape[0],1,cost_4.shape[3],cost_4.shape[4]) #disp_samples.view(1, self.maxdisp//4, 1, 1)=(1, 48, 1, 1), cost = (20,1, 48, 64, 128), disp_samples = (20, 48, 64, 128)
 
+        #get prediction at 1/4
+        #pred_4 = regression_topk(cost.squeeze(1), disp_samples, 2) # cost.squeeze(1) = (20, 48, 64, 128)
+        #pred_4_up = context_upsample(pred, spx_pred)
+
+        #get distribution and top k candidates at 1/4
+        full_band_prob_4, disp_candidates_topk_4, renormalized_prob_topk_4 = get_prob_and_disp_topk(cost_4.squeeze(1), disp_samples_4, self.k)
+
+        #idea from Section III.C
+        pred_dominant_modal_4 = self.select_dominant_modal_disparity(full_band_prob_4, disp_samples_4)
+
+        pred_dominant_modal_4_up = context_upsample(pred_dominant_modal_4, spx_pred)  # pred_up = [n, h, w]
 
         if self.training:
-            # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
-            # Commenting out before focusing on features for cfnet
-            # features_left[0],volume,cost,conv8
-            return [pred_up*4, pred.squeeze(1)*4],ll,rl
-
+            return [pred_dominant_modal_4_up * 4, pred_dominant_modal_4.squeeze(1) * 4]
         else:
-            return [pred_up*4]
+            return [pred_dominant_modal_4_up * 4]
+
