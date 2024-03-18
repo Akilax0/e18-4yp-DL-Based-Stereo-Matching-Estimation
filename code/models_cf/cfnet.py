@@ -139,8 +139,8 @@ class feature_extraction(nn.Module):
         l3 = self.layer3(l2)    #1/4
         l4 = self.layer4(l3)    #1/8
         l5 = self.layer5(l4)    #1/16
-        l6_ = self.layer6(l5)    #1/32
-        l6 = self.pyramid_pooling(l6_)
+        l6 = self.layer6(l5)    #1/32
+        l6 = self.pyramid_pooling(l6)
 
         concat5 = torch.cat((l5, self.upconv6(l6)), dim=1)
         decov_5 = self.iconv5(concat5)
@@ -155,11 +155,17 @@ class feature_extraction(nn.Module):
 
 
         # gw1 = self.gw1(decov_1)
-        gw2 = self.gw2(decov_2)
-        gw3 = self.gw3(decov_3)
-        gw4 = self.gw4(decov_4)
-        gw5 = self.gw5(decov_5)
-        gw6 = self.gw6(l6)
+        gw2 = self.gw2(decov_2) #1/2
+        gw3 = self.gw3(decov_3) #1/4
+        gw4 = self.gw4(decov_4) #1/8
+        gw5 = self.gw5(decov_5) #1/16
+        gw6 = self.gw6(l6)      #1/32
+        
+        # print("Layer comparison 1:",l2.size(),decov_2.size())
+        # print("Layer comparison 2:",l3.size(),decov_3.size())
+        # print("Layer comparison 3:",l4.size(),decov_4.size())
+        # print("Layer comparison 4:",l5.size(),decov_5.size())
+        # print("Layer comparison 5:",l6.size())
 
         if not self.concat_feature:
             return {"gw2": gw2, "gw3": gw3, "gw4": gw4}
@@ -174,7 +180,7 @@ class feature_extraction(nn.Module):
             # Outputting feature layers on top of the default dictionary
             return {"gw2": gw2, "gw3": gw3, "gw4": gw4, "gw5": gw5, "gw6": gw6,
                     "concat_feature2": concat_feature2, "concat_feature3": concat_feature3, "concat_feature4": concat_feature4,
-                    "concat_feature5": concat_feature5, "concat_feature6": concat_feature6}, [l2,l3,l4,l5,l6_]
+                    "concat_feature5": concat_feature5, "concat_feature6": concat_feature6}, [decov_2,decov_3,decov_4,decov_5,l6]
 
 class hourglassup(nn.Module):
     def __init__(self, in_channels):
@@ -500,7 +506,7 @@ class cfnet(nn.Module):
         features_left,ll = self.feature_extraction(left)
         features_right,rl = self.feature_extraction(right)
 
-        print("CFNET feature extraction dict length: ",len(features_left)) 
+        # print("CFNET feature extraction dict length: ",len(features_left)) 
 
 
         gwc_volume4 = build_gwc_volume(features_left["gw4"], features_right["gw4"], self.maxdisp // 8,

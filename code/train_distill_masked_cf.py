@@ -211,7 +211,7 @@ def train_sample(sample, compute_metrics=False):
         t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl = t_model(imgL,imgR)
 
     # introducing CFNet
-    print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
+    # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
     
     '''
     Features from student as s_ll,s_rl
@@ -221,11 +221,17 @@ def train_sample(sample, compute_metrics=False):
     
     '''
 
-    # s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
-    # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
-    # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
-    
+    # left features aligned 
+    s_ll[0] = align(s_ll[0],s_ll[0].size()[1],t_ll[1].size()[1])
+    s_ll[1] = align(s_ll[1],s_ll[1].size()[1],t_ll[2].size()[1])
+    s_ll[2] = align(s_ll[2],s_ll[2].size()[1],t_ll[3].size()[1])
+    s_ll[3] = align(s_ll[3],s_ll[3].size()[1],t_ll[4].size()[1])
+
+    # right features aligned 
+    s_rl[0] = align(s_rl[0],s_rl[0].size()[1],t_rl[1].size()[1])
+    s_rl[1] = align(s_rl[1],s_rl[1].size()[1],t_rl[2].size()[1])
+    s_rl[2] = align(s_rl[2],s_rl[2].size()[1],t_rl[3].size()[1])
+    s_rl[3] = align(s_rl[3],s_rl[3].size()[1],t_rl[4].size()[1])
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
     # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
@@ -256,17 +262,19 @@ def train_sample(sample, compute_metrics=False):
     # classificatio = 0.5
     # semantic = 0.75
     # detection / instance - 0.45
-    lambda_mgd = 0.45
+    lambda_mgd = 0.50
 
-    # Uncomment as required
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd)  
+    
 
-    # feat_loss = KD_feat_loss(student=s_feat,teacher=t_feat) 
-    
-    # print("Original feature loss:  ",feat_loss)
-    # mgd loss    
-    # feat_loss = get_dis_loss(preds_S=s_feat, preds_T=t_feat, student_channels=s_feat.size()[1] , teacher_channels=t_feat.size()[1], lambda_mgd=lambda_mgd)
-    # print("Masked feature loss:  ",feat_loss)
-    
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd)  
+
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
