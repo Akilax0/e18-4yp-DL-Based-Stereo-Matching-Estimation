@@ -17,15 +17,18 @@ import os.path as osp
 class SceneFlowDatset(Dataset):
     def __init__(self, datapath, list_filename, training):
         self.datapath = datapath
-        #self.left_filenames, self.right_filenames, self.disp_filenames = self.load_path(list_filename)
-        self.left_filenames = []
-        self.right_filenames = []
-        self.disp_filenames = []
+        self.left_filenames, self.right_filenames, self.disp_filenames = self.load_path(list_filename)
+        
+        # Uncomment for updated data loading
+        # self.left_filenames = []
+        # self.right_filenames = []
+        # self.disp_filenames = []
 
         self.training = training
-        self.dstype= 'frames_finalpass'
-
-        self.load_path2()
+        
+        # Uncomment for updated data loading
+        # self.dstype= 'frames_finalpass'
+        # self.load_path2()
 
     def load_path(self, list_filename):
         lines = read_all_lines(list_filename)
@@ -34,6 +37,7 @@ class SceneFlowDatset(Dataset):
         right_images = [x[1] for x in splits]
         disp_images = [x[2] for x in splits]
         return left_images, right_images, disp_images
+
     def load_path2(self):
         if not self.training:
             self._add_things("TEST")
@@ -45,12 +49,13 @@ class SceneFlowDatset(Dataset):
     def _add_things(self, split='TRAIN'):
         """ Add FlyingThings3D data """
 
-
         # root = osp.join(self.root, 'FlyingThings3D')
         root = self.datapath
         left_images = sorted( glob(osp.join(root,'FlyingThings3D', self.dstype, split, '*/*/left/*.png')) )
         right_images = [ im.replace('left', 'right') for im in left_images ]
         disparity_images = [ im.replace(self.dstype, 'disparity').replace('.png', '.pfm') for im in left_images ]
+
+        # print("Looking at the dataset", root, left_images, right_images, disparity_images)
 
         # Choose a random subset of 400 images for validation
         state = np.random.get_state()
@@ -65,10 +70,10 @@ class SceneFlowDatset(Dataset):
                 self.right_filenames += [ img2 ]
                 self.disp_filenames += [ disp ]
 
+                # print("filename: ",self.left_filenames, self.right_filenames, self.disp_filenames)
 
     def _add_monkaa(self, split="TRAIN"):
         """ Add FlyingThings3D data """
-
 
         root = self.datapath
         left_images = sorted( glob(osp.join(root, 'Monkaa', self.dstype, split, '*/left/*.png')) )
@@ -85,7 +90,6 @@ class SceneFlowDatset(Dataset):
     def _add_driving(self, split="TRAIN"):
         """ Add FlyingThings3D data """
 
-
         root = self.datapath
         left_images = sorted( glob(osp.join(root, 'Driving', self.dstype, split, '*/*/*/left/*.png')) )
         right_images = [ image_file.replace('left', 'right') for image_file in left_images ]
@@ -99,6 +103,7 @@ class SceneFlowDatset(Dataset):
 
 
     def load_image(self, filename):
+        # print("filename ", filename)
         return Image.open(filename).convert('RGB')
 
     def load_disp(self, filename):
@@ -118,13 +123,15 @@ class SceneFlowDatset(Dataset):
         return len(self.left_filenames)
 
     def __getitem__(self, index):
-        #left_img = self.load_image(os.path.join(self.datapath, self.left_filenames[index]))
-        #right_img = self.load_image(os.path.join(self.datapath, self.right_filenames[index]))
-        #disparity = self.load_disp(os.path.join(self.datapath, self.disp_filenames[index]))
+        
+        # Comment this for moidified 
+        left_img = self.load_image(os.path.join(self.datapath, self.left_filenames[index]))
+        right_img = self.load_image(os.path.join(self.datapath, self.right_filenames[index]))
+        disparity = self.load_disp(os.path.join(self.datapath, self.disp_filenames[index]))
 
-        left_img = self.load_image(self.left_filenames[index])
-        right_img = self.load_image(self.right_filenames[index])
-        disparity = self.load_disp(self.disp_filenames[index])
+        # left_img = self.load_image(self.left_filenames[index])
+        # right_img = self.load_image(self.right_filenames[index])
+        # disparity = self.load_disp(self.disp_filenames[index])
 
         if self.training:
 

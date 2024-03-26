@@ -503,6 +503,10 @@ class cfnet(nn.Module):
         return cost_volume, disparity_samples
 
     def forward(self, left, right):
+        # uncertainty maps
+        umaps = []
+
+        # print("Original left image size : ",left.size())
         features_left,ll = self.feature_extraction(left)
         features_right,rl = self.feature_extraction(right)
 
@@ -531,6 +535,7 @@ class cfnet(nn.Module):
         else:
             volume4 = gwc_volume4
 
+        # the 4 3D conv layers on each cost volume
         cost0_4 = self.dres0(volume4)
         cost0_4 = self.dres1(cost0_4) + cost0_4
 
@@ -541,13 +546,17 @@ class cfnet(nn.Module):
         out1_4 = self.combine1(cost0_4, cost0_5, cost0_6)
         out2_4 = self.dres3(out1_4)
 
+        # this is the end of the fusion
 
         cost2_s4 = self.classif2(out2_4)
         cost2_s4 = torch.squeeze(cost2_s4, 1)
         pred2_possibility_s4 = F.softmax(cost2_s4, dim=1)
         pred2_s4 = disparity_regression(pred2_possibility_s4, self.maxdisp // 8).unsqueeze(1)
         pred2_s4_cur = pred2_s4.detach()
+        # uncertainty calculation
         pred2_v_s4 = disparity_variance(pred2_possibility_s4, self.maxdisp // 8, pred2_s4_cur)  # get the variance
+        umaps.append(pred2_s4)
+
         pred2_v_s4 = pred2_v_s4.sqrt()
         mindisparity_s3 = pred2_s4_cur - (self.gamma_s3 + 1) * pred2_v_s4 - self.beta_s3
         maxdisparity_s3 = pred2_s4_cur + (self.gamma_s3 + 1) * pred2_v_s4 + self.beta_s3
@@ -576,6 +585,8 @@ class cfnet(nn.Module):
         pred1_s3 = torch.sum(cost1_s3_possibility * disparity_samples_s3, dim=1, keepdim=True)
         pred1_s3_cur = pred1_s3.detach()
         pred1_v_s3 = disparity_variance_confidence(cost1_s3_possibility, disparity_samples_s3, pred1_s3_cur)
+        umaps.append(pred1_v_s3)
+
         pred1_v_s3 = pred1_v_s3.sqrt()
         mindisparity_s2 = pred1_s3_cur - (self.gamma_s2 + 1) * pred1_v_s3 - self.beta_s2
         maxdisparity_s2 = pred1_s3_cur + (self.gamma_s2 + 1) * pred1_v_s3 + self.beta_s2
@@ -605,7 +616,12 @@ class cfnet(nn.Module):
         cost1_s2_possibility = F.softmax(cost1_s2, dim=1)
         pred1_s2 = torch.sum(cost1_s2_possibility * disparity_samples_s2, dim=1, keepdim=True)
 
-        # pred1_v_s2 = disparity_variance_confidence(cost1_s2_possibility, disparity_samples_s2, pred1_s2)
+
+        # Is this the uncertainty estimation we need?
+
+        pred1_v_s2 = disparity_variance_confidence(cost1_s2_possibility, disparity_samples_s2, pred1_s2)
+        umaps.append(pred1_v_s2)
+
         # pred1_v_s2 = pred1_v_s2.sqrt()
 
         if self.training:
@@ -671,8 +687,8 @@ class cfnet(nn.Module):
             pred1_s2 = F.upsample(pred1_s2 * 2, [left.size()[2], left.size()[3]], mode='bilinear', align_corners=True)
             pred1_s2 = torch.squeeze(pred1_s2, 1)
 
-
-            return [pred1_s2], [pred1_s3_up], [pred2_s4] , ll, rl
+            # ll / rl [1/2,1/4,1/8,1/16,1/32]  umaps [1/8,1/4,1/2]
+            return [pred1_s2], [pred1_s3_up], [pred2_s4] , ll, rl, umaps 
 
 
 def CFNet(d):

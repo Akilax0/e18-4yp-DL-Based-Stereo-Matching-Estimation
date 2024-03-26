@@ -1,6 +1,5 @@
 '''
 
-
 Code for distilling knowledge with masks
 
 TBD on which implememntaion 
@@ -208,7 +207,7 @@ def train_sample(sample, compute_metrics=False):
         t_model.eval()
         # teacher disp ests
         # t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
-        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl = t_model(imgL,imgR)
+        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,_ = t_model(imgL,imgR)
 
     # introducing CFNet
     # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
@@ -262,7 +261,7 @@ def train_sample(sample, compute_metrics=False):
     # classificatio = 0.5
     # semantic = 0.75
     # detection / instance - 0.45
-    lambda_mgd = 0.50
+    lambda_mgd = 0
 
     feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd)  
     feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd)  
@@ -377,7 +376,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
             nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    mat = torch.rand((N,C,1,1)).to(device) 
+    mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
 
     # mask generation
@@ -415,7 +414,7 @@ def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_
             nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    mat = torch.rand((N,C,1,1,1)).to(device) 
+    mat = torch.rand((N,1,D,H,W)).to(device) 
     # print("matrix: " ,mat.size())
 
     # mask generation

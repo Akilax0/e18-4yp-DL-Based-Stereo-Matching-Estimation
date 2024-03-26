@@ -80,6 +80,7 @@ class Disp2Prob(object):
         # in case divide or log 0, we plus a tiny constant value
         probability = probability * mask + self.eps
 
+
         # in case probability is NaN
         if isNaN(probability.min()) or isNaN(probability.max()):
             print('Probability ==> min: {}, max: {}'.format(probability.min(), probability.max()))
@@ -145,37 +146,61 @@ class OneHotDisp2Prob(Disp2Prob):
 def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     assert len(gtDisp.shape) == 4
 
+    print("gtDisp Nan? ",torch.isnan(gtDisp).any())
     b, c, h, w = gtDisp.shape
     unfolded_gtDisp = F.unfold(gtDisp, kernel_size=(m,n), padding=(m//2, n//2))
     neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
+    print("Neighbourhood size",neighborhood.size())
     p1_p2_cluster = torch.abs(neighborhood - gtDisp ) > thres # 0: P1 cluster , 1: P0 cluster
 
     p2_count = torch.sum(p1_p2_cluster, dim=1, keepdim=True)
 
     total_count = torch.ones((b,1,h,w)) * (m*n)
-    p1_count = total_count - p2_count
+    # Get to same device
+    total_count = total_count.to(p2_count.get_device())
 
+    p1_count = total_count - p2_count
+    
+    print("p2_count",p2_count.eq(0).any())
+    
+    # p2_ount contains 0 resulting in NaNs 
+    # what can we do here?
     mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
 
     w = alpha + (p1_count -1) * (1-alpha) * (m*n-1)
 
+    print("w ",torch.isnan(w).any())
     return mu2, w
 
 
 def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
-    kernel = torch.ones(1, 1, m, n).to(gt.device)
+    # Getting batch size and channel of gt
+    b,h,w = gt.size()
 
+    # kernel = torch.ones(1, 1, m, n).to(gt.device)
+    kernel = torch.ones(b,1, m, n).to(gt.device)
+    
+    gt = torch.unsqueeze(gt,dim=1)
+
+    print("kernel gt ",kernel.size(),gt.size())
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
     mean_gt /= m * n
 
     edge_mask = torch.abs(gt - mean_gt) > th1
 
-
+    print("gt ",torch.isnan(gt).any())
     dist1 = LaplaceDisp2Prob(maxDisp, gt, variance=1)
     non_edge_prob_dist = dist1.getProb()
 
+    # mu2 gt disp
     mu2, w = fetch_neighborhood_info(gt, m,n, th2, alpha)
+    
+    print("mu2 ",torch.isnan(mu2).any())
     dist2 = LaplaceDisp2Prob(maxDisp, mu2, variance=1)
+
+    print("Good until here") 
+    print("dist2 ",dist2)
+    # Equation on paper
     edge_prob_dist = w*non_edge_prob_dist + (1-w)*dist2.getProb()
 
     md_gt_dist = (~edge_mask) * non_edge_prob_dist + edge_mask * edge_prob_dist

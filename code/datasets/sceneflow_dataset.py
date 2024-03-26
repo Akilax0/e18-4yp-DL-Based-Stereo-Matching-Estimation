@@ -27,6 +27,7 @@ class SceneFlowDatset(Dataset):
         return left_images, right_images, disp_images
 
     def load_image(self, filename):
+        # print("filename: ",filename)
         return Image.open(filename).convert('RGB')
 
     def load_disp(self, filename):

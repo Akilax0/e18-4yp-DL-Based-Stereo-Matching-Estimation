@@ -53,7 +53,10 @@ def model_loss_train_v2(disp_ests, disp_gts, img_masks, max_disp): #level at {1,
 
     loss_l1_1 = weights[0] * F.smooth_l1_loss(pred[img_mask], disp_gt[img_mask], size_average=True) # at size 1
     loss_l1_4 = weights[1] * F.smooth_l1_loss(pred_4[img_mask_4], disp_gt_4[img_mask_4], size_average=True)  # at size 1/4
-    loss_ce_4 = weights[1] * ce_based_distribution_loss(pred_4, disp_gt_4, img_mask_4, max_disp/4) #at size 1/4
+    
+    loss_ce_4 = 0
+    # Commenting out -> Gives channel number error
+    loss_ce_4 = weights[1] * ce_based_distribution_loss(pred_4, disp_gt_4, img_mask_4, max_disp//4) #at size 1/4
 
     loss = loss_l1_1 + loss_l1_4 + loss_ce_4
 

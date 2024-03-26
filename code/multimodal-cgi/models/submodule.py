@@ -329,6 +329,10 @@ def get_prob_and_disp_topk(cost, disparity_samples, k): #cost = (20,48,64,128), 
     cost_topk = torch.gather(cost, 1, pool_ind) #(20, 2, 64, 128)
     renormalized_prob_topk = F.softmax(cost_topk, 1) #(20,2,64,128) # renormalized the topk probability
     disparity_candidates_topk = torch.gather(disparity_samples, 1, pool_ind)   #(20,2,64,128)
+    
+
+    # Outputing 3 values here but the only thing being used is the full softmax oprtation (full_band_prob)
+    print(" (prob, topk, norm): ",full_band_prob.size(),disparity_candidates_topk.size(),renormalized_prob_topk.size())
 
     return full_band_prob, disparity_candidates_topk, renormalized_prob_topk
 

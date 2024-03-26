@@ -20,14 +20,14 @@ from torch.utils.data import DataLoader
 import gc
 
 cudnn.benchmark = True
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Multi-modal extension of CGI-Stereo')
 parser.add_argument('--model', default='Multimodal_CGI', help='select a model structure', choices=__models__.keys())
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
 
 parser.add_argument('--dataset', default='sceneflow', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default="data", help='data path')
+parser.add_argument('--datapath', default="/data/sceneflow", help='data path')
 parser.add_argument('--trainlist', default='./filenames/sceneflow_train.txt', help='training list')
 parser.add_argument('--testlist',default='./filenames/sceneflow_test.txt', help='testing list')
 
@@ -60,15 +60,18 @@ os.makedirs(args.logdir, exist_ok=True)
 print("creating new summary file")
 logger = SummaryWriter(args.logdir)
 
+
 # dataset, dataloader
 StereoDataset = __datasets__[args.dataset]
+print("Train list: ",args.trainlist)
 train_dataset = StereoDataset(args.datapath, args.trainlist, True)
 test_dataset = StereoDataset(args.datapath, args.testlist, False)
+print("Train dataset: ",train_dataset)
 TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=8, drop_last=True)
 TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 # model, optimizer
-model = __models__[args.model](args.maxdisp)
+model = __models__[args.model](2,args.maxdisp)
 model = nn.DataParallel(model)
 model.cuda()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))
@@ -180,7 +183,11 @@ def train_sample(sample, compute_metrics=False):
     mask_4 = (disp_gt_4 < args.maxdisp) & (disp_gt_4 > 0)
     masks = [mask, mask_4]
     disp_gts = [disp_gt, disp_gt_4]
-    loss = model_loss_train_v2(disp_ests, disp_gts, masks, model.maxdisp)  # two level: 1, 1/4
+    
+    # Checck here implementation of III.B 
+    # Was model.maxdisp -> changed to args.maxdisp
+    loss = model_loss_train_v2(disp_ests, disp_gts, masks, args.maxdisp)  # two level: 1, 1/4
+
 
     disp_ests_final = [disp_ests[0]]
 

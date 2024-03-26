@@ -242,26 +242,38 @@ class Multimodal_CGI(nn.Module):
         self.spatial_transformer = SpatialTransformer()
 
     def find_bounds(self, prob):
+        # prob [20,48,64,128]
+        # max_prob [20,64,128]
+        # max_indices [20,64,128]
+        # left_bound [20,64,128]
+        # left_bound [20,64,128]
+        # left_bound[max_indices] [20,64,128,64,128]
+
         max_probs, max_indices = torch.max(prob, dim=1)
         left_bound = torch.zeros_like(max_indices)
         right_bound = torch.zeros_like(max_indices)
 
-        #Traverse left to find left bound
+        print("prob: ",prob.size()) 
+        print("Debug: max_probs, max_indices, left_bound, right_bound , left_bound[0]", max_probs.size(),max_indices.size(),left_bound.size(),right_bound.size(),left_bound[0].size())
+
+        #Traverse right to find left bound
         for i in range(prob.size(2)):
+            # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
             left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
 
-        # Traverse left to find left bound
+        # Traverse left to find right bound
         for i in range(prob.size(2)-1, -1, -1):
-                right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[
-                    max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],
-                                                      right_bound[max_indices] + 1)
+            # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+            right_bound[i] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
         return max_probs, max_indices, left_bound, right_bound
 
+    # III.C for selecting dominant modal
     def select_dominant_modal_disparity(self, prob_dist, disp_samples):
         n, d, h, w = prob_dist.shape
         _, d2, h2, w2 = disp_samples.shape
 
         assert d==d2 and h==h2 and w==w2
+        print("All dimensions ",d,h,w,d2,h2,w2)
 
         cumulative_prob = torch.cumsum(prob_dist, dim=1)
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
@@ -310,20 +322,32 @@ class Multimodal_CGI(nn.Module):
         disp_samples_4 = torch.arange(0, self.maxdisp//4, dtype=cost_4.dtype, device=cost_4.device) #(48,)
         disp_samples_4 = disp_samples_4.view(1, self.maxdisp//4, 1, 1).repeat(cost_4.shape[0],1,cost_4.shape[3],cost_4.shape[4]) #disp_samples.view(1, self.maxdisp//4, 1, 1)=(1, 48, 1, 1), cost = (20,1, 48, 64, 128), disp_samples = (20, 48, 64, 128)
 
+        # Comment wen using III.C 
         #get prediction at 1/4
-        #pred_4 = regression_topk(cost.squeeze(1), disp_samples, 2) # cost.squeeze(1) = (20, 48, 64, 128)
-        #pred_4_up = context_upsample(pred, spx_pred)
-
-        #get distribution and top k candidates at 1/4
-        full_band_prob_4, disp_candidates_topk_4, renormalized_prob_topk_4 = get_prob_and_disp_topk(cost_4.squeeze(1), disp_samples_4, self.k)
-
-        #idea from Section III.C
-        pred_dominant_modal_4 = self.select_dominant_modal_disparity(full_band_prob_4, disp_samples_4)
-
-        pred_dominant_modal_4_up = context_upsample(pred_dominant_modal_4, spx_pred)  # pred_up = [n, h, w]
+        # Squeeze removes the channel dimension 
+        # The cost volume is at 1/4
+        pred_4 = regression_topk(cost_4.squeeze(1), disp_samples_4, 2) # cost.squeeze(1) = (20, 48, 64, 128)
+        pred_4_up = context_upsample(pred_4, spx_pred)
 
         if self.training:
-            return [pred_dominant_modal_4_up * 4, pred_dominant_modal_4.squeeze(1) * 4]
+            return [pred_4_up*4, pred_4.squeeze(1)*4]
+
         else:
-            return [pred_dominant_modal_4_up * 4]
+            return [pred_4_up*4]
+
+
+
+        # #get distribution and top k candidates at 1/4
+        # full_band_prob_4, disp_candidates_topk_4, renormalized_prob_topk_4 = get_prob_and_disp_topk(cost_4.squeeze(1), disp_samples_4, self.k)
+
+        # #idea from Section III.C
+        # # Whatever happens happens here
+        # pred_dominant_modal_4 = self.select_dominant_modal_disparity(full_band_prob_4, disp_samples_4)
+
+        # pred_dominant_modal_4_up = context_upsample(pred_dominant_modal_4, spx_pred)  # pred_up = [n, h, w]
+
+        # if self.training:
+        #     return [pred_dominant_modal_4_up * 4, pred_dominant_modal_4.squeeze(1) * 4]
+        # else:
+        #     return [pred_dominant_modal_4_up * 4]
 
