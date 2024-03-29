@@ -180,6 +180,7 @@ class SceneFlowDatset(Dataset):
 
             # w, h = left_img.size
 
+            # Disparity at other resolutions by interpoolating 
             disparity = np.ascontiguousarray(disparity, dtype=np.float32)
             disparity_2 = cv2.resize(disparity, (tw//2, th//2), interpolation=cv2.INTER_NEAREST)
             disparity_4= cv2.resize(disparity, (tw // 4, th // 4), interpolation=cv2.INTER_NEAREST)

@@ -15,10 +15,19 @@ def ce_based_distribution_loss(prob, disp_gt, img_mask, max_disp):  # cost = (20
     th1 = 1 # threshold to determine whether it is edge or not
     th2 = 1 # threshold to determine p1-p2 clustering
     alpha = 0.8
+    
+    # Just debugging to check if masking works 
+    # print("Mask: ",img_mask)
+    # print("log pred prob : ",log_pred_prob_distribution)
+    # masked_log_pred_prob_dist = log_pred_prob_distribution[img_mask]
+    # print("Masked log pred prob: ",masked_log_pred_prob_dist.size())
+    # masked_log_pred_prob_dist = log_pred_prob_distribution*img_mask
+    # print("Masked log pred prob multi: ",masked_log_pred_prob_dist)
 
     #idea from III.B
     gt_prob_dist = generate_md_gt_distribution(disp_gt, m, n, th1, th2, max_disp, alpha)
 
+    #Is this masking ?
     masked_gt_prob_dist = gt_prob_dist[img_mask]
     masked_log_pred_prob_dist = log_pred_prob_distribution[img_mask]
 
@@ -56,6 +65,8 @@ def model_loss_train_v2(disp_ests, disp_gts, img_masks, max_disp): #level at {1,
     
     loss_ce_4 = 0
     # Commenting out -> Gives channel number error
+    # Printing out the inputs
+    # print("Predicted, GT, img_mask, maxdisp", pred_4.size(),disp_gt_4.size(),img_mask_4.size(),max_disp)
     loss_ce_4 = weights[1] * ce_based_distribution_loss(pred_4, disp_gt_4, img_mask_4, max_disp//4) #at size 1/4
 
     loss = loss_l1_1 + loss_l1_4 + loss_ce_4
@@ -77,8 +88,3 @@ def model_loss_train_v3(disp_ests, disp_gts, img_masks, max_disp): # level at {1
     loss = loss1 + loss2 + loss3
 
     return loss
-
-
-
-
-

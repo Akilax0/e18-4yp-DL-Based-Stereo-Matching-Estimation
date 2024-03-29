@@ -110,6 +110,7 @@ class LaplaceDisp2Prob(Disp2Prob):
     def calProb(self):
         # 1/N * exp( - (d - d{gt}) / var), N is normalization factor, [BatchSize, maxDisp, Height, Width]
         scaled_distance = ((-torch.abs(self.index - self.gtDisp)) / self.variance)
+        # print("scaled distance size: ",scaled_distance.size())
         probability = F.softmax(scaled_distance, dim=1)
 
         return probability
@@ -144,14 +145,29 @@ class OneHotDisp2Prob(Disp2Prob):
         return probability
 
 def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
+    # The pseudo code is for this section
+    
     assert len(gtDisp.shape) == 4
 
     print("gtDisp Nan? ",torch.isnan(gtDisp).any())
     b, c, h, w = gtDisp.shape
-    unfolded_gtDisp = F.unfold(gtDisp, kernel_size=(m,n), padding=(m//2, n//2))
-    neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
-    print("Neighbourhood size",neighborhood.size())
-    p1_p2_cluster = torch.abs(neighborhood - gtDisp ) > thres # 0: P1 cluster , 1: P0 cluster
+    
+    print("GT Disparity size: ", gtDisp.size())
+
+    # unfolded_gtDisp = F.unfold(gtDisp, kernel_size=(m,n), padding=(m//2, n//2))
+    unfolded_gtDisp = F.pad(gtDisp,pad=(m//2,m//2,n//2,n//2), mode='constant',value=0) 
+    print("unfolded (padded) disparity: ",unfolded_gtDisp.size())
+    
+
+    
+    # neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
+    # neighborhood = unfolded_gtDisp.view(b , 1, h+m, w+n )
+    neighborhood = unfolded_gtDisp
+    print("neighbourhood: ",neighborhood.size())
+
+    # p1_p2_cluster = torch.abs(neighborhood - gtDisp ) > thres # 0: P1 cluster , 1: P0 cluster
+    p1_p2_cluster = # from pseudo code 
+    print("p1_p2_cluster: ",p1_p2_cluster.size())
 
     p2_count = torch.sum(p1_p2_cluster, dim=1, keepdim=True)
 
@@ -186,12 +202,14 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
     mean_gt /= m * n
 
+    # edge - 1  non edge - 0
     edge_mask = torch.abs(gt - mean_gt) > th1
 
     print("gt ",torch.isnan(gt).any())
     dist1 = LaplaceDisp2Prob(maxDisp, gt, variance=1)
     non_edge_prob_dist = dist1.getProb()
 
+    # mu2 - means of the disparities P2?
     # mu2 gt disp
     mu2, w = fetch_neighborhood_info(gt, m,n, th2, alpha)
     

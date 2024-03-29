@@ -253,19 +253,65 @@ class Multimodal_CGI(nn.Module):
         left_bound = torch.zeros_like(max_indices)
         right_bound = torch.zeros_like(max_indices)
 
-        print("prob: ",prob.size()) 
+
+        #Iterate through the probability levels
+        for i in range(prob.size(1)):
+            print("prob: ",i,prob[0,i,:,:]) 
+            
+            # This gives dominant peak at each disparity level
+            ma_prob = torch.max(prob[0,i,:,:])
+            print("max_prob: ",ma_prob)
+
         print("Debug: max_probs, max_indices, left_bound, right_bound , left_bound[0]", max_probs.size(),max_indices.size(),left_bound.size(),right_bound.size(),left_bound[0].size())
 
+        # #Traverse right to find left bound
+        # for i in range(prob.size(2)):
+        #     # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+        #     left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, \
+        #                                              left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+
+        # # Traverse left to find right bound
+        # for i in range(prob.size(2)-1, -1, -1):
+        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
+        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+            
+
+        # Iteration happens in the disparity dimension
         #Traverse right to find left bound
         for i in range(prob.size(2)):
-            # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-            left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+            for j in range(prob.size(3)):
+                # Iterating through the cells
+                
+                # max disp for all channels
+                max_disp = max_probs[:,i,j]
+                max_pos = max_indices[:,i,j]
 
-        # Traverse left to find right bound
-        for i in range(prob.size(2)-1, -1, -1):
-            # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-            right_bound[i] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+                # print("Max Disp size , pos: ",max_disp.size(),max_pos.size())
+                # print("spatial position:",i,j)
+                # print("Max pos: ",max_pos)
+                # print("Max disp: ",max_disp)
+
+                a = max_disp
+
+                # for k1 in range(max_pos[0]+1,prob.size(1)):
+                #     if(a>max_)
+
+
+
+            # # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+            # left_bound[i]=torch.where(prob[torch.arange(prob.size(0)), max_indices, \
+            #                                          left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+
+        # # Traverse left to find right bound
+        # for i in range(prob.size(1)-1, -1, -1):
+        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
+        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+            
         return max_probs, max_indices, left_bound, right_bound
+
+
 
     # III.C for selecting dominant modal
     def select_dominant_modal_disparity(self, prob_dist, disp_samples):
@@ -276,8 +322,10 @@ class Multimodal_CGI(nn.Module):
         print("All dimensions ",d,h,w,d2,h2,w2)
 
         cumulative_prob = torch.cumsum(prob_dist, dim=1)
+        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
 
+        print("===============Cumulative prob generated ===================")
         for i in range(w):
             prob_dist[:, max_indices, :, torch.where(torch.arange(n).unsqueeze(1) == max_indices & ((torch.arange(w) < left_bound[max_indices].unsqueeze(1)) | (torch.arange(w) > right_bound.unsqueeze(1))), True, False)]=0.0
 
