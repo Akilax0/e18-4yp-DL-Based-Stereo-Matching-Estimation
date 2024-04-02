@@ -87,7 +87,6 @@ class Disp2Prob(object):
             print('Disparity Ground Truth after mask out ==> min: {}, max: {}'.format(self.gtDisp.min(),
                                                                                       self.gtDisp.max()))
             raise ValueError(" \'probability contains NaN!")
-
         return probability
 
     def kick_invalid_half(self):
@@ -152,40 +151,70 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     print("gtDisp Nan? ",torch.isnan(gtDisp).any())
     b, c, h, w = gtDisp.shape
     
-    print("GT Disparity size: ", gtDisp.size())
+    print("GT Disparity size: ", gtDisp)
+
+    print("m , n, h, w",m,n, h , w)
+
+
+    # Figure out j and i here 
+    # The indexing is whats causing problems now.
+
+
+    m1 = m//2
+    n1 = n//2
 
     # unfolded_gtDisp = F.unfold(gtDisp, kernel_size=(m,n), padding=(m//2, n//2))
-    unfolded_gtDisp = F.pad(gtDisp,pad=(m//2,m//2,n//2,n//2), mode='constant',value=0) 
+    unfolded_gtDisp = F.pad(gtDisp,pad=(n//2,n//2,m//2,m//2), mode='constant',value=0) 
     print("unfolded (padded) disparity: ",unfolded_gtDisp.size())
     
+    unfolded_gtDisp = unfolded_gtDisp.squeeze(0).squeeze(0)
+    print("Padded : ", n1,m1, unfolded_gtDisp)
 
-    
-    # neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
-    # neighborhood = unfolded_gtDisp.view(b , 1, h+m, w+n )
-    neighborhood = unfolded_gtDisp
-    print("neighbourhood: ",neighborhood.size())
+    for j in range(n1,w+n1):
+        for i in range(m1,h+m1):
+            p1_count =0
+            p2_count =0
+            print("value , i , j",unfolded_gtDisp[j,i],i,j)
+            print("r,c variants: ",j,i,j-n1,j+n1,i-m1,i+m1)
+            
+            for r in range(j-n1,j+n1+1):
+                for c in range(i-m1,i+m1+1):
+                    print("r,c",r,c)
+                    if(abs(unfolded_gtDisp[r,c]-unfolded_gtDisp[j,i]) < 3):
+                        p1_count = p1_count + 1
+                    else:
+                        p2_count = p2_count + 1
+                        
+            print("p1 and p2 count at j,i and value: ",p1_count,p2_count,j,i,unfolded_gtDisp[i,j])
+            
+
+    # # neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
+    # # neighborhood = unfolded_gtDisp.view(b , 1, h+m, w+n )
+    # neighborhood = unfolded_gtDisp
+    # print("neighbourhood: ",neighborhood.size())
 
     # p1_p2_cluster = torch.abs(neighborhood - gtDisp ) > thres # 0: P1 cluster , 1: P0 cluster
-    p1_p2_cluster = # from pseudo code 
-    print("p1_p2_cluster: ",p1_p2_cluster.size())
+    # # p1_p2_cluster = # from pseudo code check again 
+    # print("p1_p2_cluster: ",p1_p2_cluster.size())
 
-    p2_count = torch.sum(p1_p2_cluster, dim=1, keepdim=True)
+    # p2_count = torch.sum(p1_p2_cluster, dim=1, keepdim=True)
 
-    total_count = torch.ones((b,1,h,w)) * (m*n)
-    # Get to same device
-    total_count = total_count.to(p2_count.get_device())
+    # total_count = torch.ones((b,1,h,w)) * (m*n)
+    # # Get to same device
+    # total_count = total_count.to(p2_count.get_device())
 
-    p1_count = total_count - p2_count
+    # p1_count = total_count - p2_count
     
-    print("p2_count",p2_count.eq(0).any())
+    # print("p2_count",p2_count.eq(0).any())
     
-    # p2_ount contains 0 resulting in NaNs 
-    # what can we do here?
-    mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
+    # # p2_ount contains 0 resulting in NaNs 
+    # # what can we do here?
+    # mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
 
-    w = alpha + (p1_count -1) * (1-alpha) * (m*n-1)
+    # w = alpha + (p1_count -1) * (1-alpha) * (m*n-1)
 
-    print("w ",torch.isnan(w).any())
+    # print("w ",torch.isnan(w).any())
+    
     return mu2, w
 
 

@@ -287,10 +287,10 @@ class Multimodal_CGI(nn.Module):
                 max_disp = max_probs[:,i,j]
                 max_pos = max_indices[:,i,j]
 
-                # print("Max Disp size , pos: ",max_disp.size(),max_pos.size())
-                # print("spatial position:",i,j)
-                # print("Max pos: ",max_pos)
-                # print("Max disp: ",max_disp)
+                print("Max Disp size , pos: ",max_disp.size(),max_pos.size())
+                print("spatial position:",i,j)
+                print("Max pos: ",max_pos)
+                print("Max disp: ",max_disp)
 
                 a = max_disp
 
@@ -321,8 +321,12 @@ class Multimodal_CGI(nn.Module):
         assert d==d2 and h==h2 and w==w2
         print("All dimensions ",d,h,w,d2,h2,w2)
 
-        cumulative_prob = torch.cumsum(prob_dist, dim=1)
-        
+        # removing cum prob along disparity dimension
+        # What we want to implement is faster left and right bounds
+        # cumulative_prob = torch.cumsum(prob_dist, dim=1)
+        cumulative_prob = prob_dist
+
+        # Working on calculating the bounds        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
 
         print("===============Cumulative prob generated ===================")

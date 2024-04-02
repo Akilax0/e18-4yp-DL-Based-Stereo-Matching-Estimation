@@ -111,6 +111,7 @@ if args.resume:
     loadckpt = os.path.join(args.logdir, all_saved_ckpts[-1])
     print("loading the lastest model in logdir: {}".format(loadckpt))
     state_dict = torch.load(loadckpt)
+    print("state dict: ",state_dict)
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
     start_epoch = state_dict['epoch'] + 1
@@ -118,6 +119,7 @@ elif args.loadckpt:
     # load the checkpoint file specified by args.loadckpt
     print("loading model {}".format(args.loadckpt))
     state_dict = torch.load(args.loadckpt)
+    print("state dict: ",state_dict)
     model_dict = model.state_dict()
     pre_dict = {k: v for k, v in state_dict['model'].items() if k in model_dict}
     model_dict.update(pre_dict) 
