@@ -25,11 +25,17 @@ def ce_based_distribution_loss(prob, disp_gt, img_mask, max_disp):  # cost = (20
     # print("Masked log pred prob multi: ",masked_log_pred_prob_dist)
 
     #idea from III.B
+    #making edges more edgier
     gt_prob_dist = generate_md_gt_distribution(disp_gt, m, n, th1, th2, max_disp, alpha)
 
     #Is this masking ?
     masked_gt_prob_dist = gt_prob_dist[img_mask]
     masked_log_pred_prob_dist = log_pred_prob_distribution[img_mask]
+    
+
+    print("masked_log_pred_prob_dist: ",masked_log_pred_prob_dist.size())
+    print("masked_gt_prob_dist: ",masked_gt_prob_dist.size())
+    
 
     loss = -(masked_log_pred_prob_dist * masked_gt_prob_dist).sum(dim=1, keepdims=True).mean() #check here
 

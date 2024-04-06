@@ -87,6 +87,9 @@ class Disp2Prob(object):
             print('Disparity Ground Truth after mask out ==> min: {}, max: {}'.format(self.gtDisp.min(),
                                                                                       self.gtDisp.max()))
             raise ValueError(" \'probability contains NaN!")
+        
+        print("probability size: ",probability.size())
+
         return probability
 
     def kick_invalid_half(self):
@@ -148,45 +151,78 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     
     assert len(gtDisp.shape) == 4
 
-    print("gtDisp Nan? ",torch.isnan(gtDisp).any())
+    # print("gtDisp Nan? ",torch.isnan(gtDisp).any())
     b, c, h, w = gtDisp.shape
     
-    print("GT Disparity size: ", gtDisp)
+    print("GT Disparity size: ", gtDisp.size())
 
-    print("m , n, h, w",m,n, h , w)
-
+    print("m , n, h, w", m, n, h, w)
 
     # Figure out j and i here 
     # The indexing is whats causing problems now.
 
-
     m1 = m//2
-    n1 = n//2
+    n1 = n//2   # 9//2
 
-    # unfolded_gtDisp = F.unfold(gtDisp, kernel_size=(m,n), padding=(m//2, n//2))
-    unfolded_gtDisp = F.pad(gtDisp,pad=(n//2,n//2,m//2,m//2), mode='constant',value=0) 
-    print("unfolded (padded) disparity: ",unfolded_gtDisp.size())
-    
-    unfolded_gtDisp = unfolded_gtDisp.squeeze(0).squeeze(0)
-    print("Padded : ", n1,m1, unfolded_gtDisp)
+    # Define the neighborhood size
+    neighborhood_size = (m, n)  # Assuming a 1x9 neighborhood
 
-    for j in range(n1,w+n1):
-        for i in range(m1,h+m1):
-            p1_count =0
-            p2_count =0
-            print("value , i , j",unfolded_gtDisp[j,i],i,j)
-            print("r,c variants: ",j,i,j-n1,j+n1,i-m1,i+m1)
-            
-            for r in range(j-n1,j+n1+1):
-                for c in range(i-m1,i+m1+1):
-                    print("r,c",r,c)
-                    if(abs(unfolded_gtDisp[r,c]-unfolded_gtDisp[j,i]) < 3):
-                        p1_count = p1_count + 1
-                    else:
-                        p2_count = p2_count + 1
-                        
-            print("p1 and p2 count at j,i and value: ",p1_count,p2_count,j,i,unfolded_gtDisp[i,j])
-            
+    # Pad the tensor to ensure every pixel becomes the central pixel of a neighborhood
+    padding = (neighborhood_size[0] // 2, neighborhood_size[1] // 2)
+    padded_tensor = F.pad(gtDisp, (padding[1], padding[1], padding[0], padding[0]), mode='constant', value=0)
+
+    print("Padded tensorr: ",padded_tensor.size())
+
+    padded_tensor = padded_tensor.squeeze(0).squeeze(0)
+    print("padded tensor squeezed: ",padded_tensor.size())
+
+    # Unfold the padded tensor to extract neighborhoods
+    unfolded_tensor = padded_tensor.unfold(2, neighborhood_size[0], 1).unfold(3,neighborhood_size[1],1)
+    print("unfolded tensor: " , unfolded_tensor.size())
+
+
+    # Extract central pixels from each neighborhood
+    central_pixels = unfolded_tensor[:, :, :, :, 0, neighborhood_size[1] // 2].unsqueeze(-1).unsqueeze(-1)
+    print("Central pixels size: ", central_pixels.size())
+
+    # Calculate differences between central pixels and the rest of the neighborhood elements
+    differences = torch.abs(unfolded_tensor - central_pixels)
+    print("Differences size: ",differences.size())
+
+    print("Differences: ",differences.size())
+
+    thresh = 3 
+
+    p1_cluster = torch.where(differences< thresh,1, 0 )
+    print("p1_cluster :",p1_cluster.size() )
+
+    p1_sum = torch.sum(p1_cluster, dim=-1).squeeze(-1)
+    print("p1_sum: ",p1_sum.size())
+
+    p1_points = torch.zeros_like(gtDisp)
+    p1_points = p1_sum
+    # print("p1 cluster: ",p1_points)
+
+    p2_points = m*n - p1_points
+
+    # print("p2_points :" , p2_points)
+
+
+    # print("p1_count:" ,torch.sum(p1_cluster))
+
+    # # Print the results
+    # for i in range(differences.size(2)):
+    #     for j in range(differences.size(3)):
+    #         central_pixel = central_pixels[10, 1, i, j].item()
+    #         neighborhood_differences = differences[i, j]
+    #         # print("neighbourhood: ",unfolded_tensor[:,:,0,neighborhood_size[1]//2])
+    #         print(f"Neighborhood at position ({i}, {j}) - Central pixel: {central_pixel:.2f}")
+    #         print("Differences:")
+    #         print(neighborhood_differences)
+
+
+
+     
 
     # # neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
     # # neighborhood = unfolded_gtDisp.view(b , 1, h+m, w+n )
@@ -205,15 +241,37 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
 
     # p1_count = total_count - p2_count
     
-    # print("p2_count",p2_count.eq(0).any())
+
+    # adding small value to p2 
+    p2_points = p2_points + 0.0001
+    print("p2_count",p2_points.eq(0).any())
     
     # # p2_ount contains 0 resulting in NaNs 
     # # what can we do here?
     # mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
 
-    # w = alpha + (p1_count -1) * (1-alpha) * (m*n-1)
+    print("p1_cluster size :",p1_cluster.size())    
+    print("unfolded tensor size :",unfolded_tensor.size())    
+    print("p2_points size",p2_points.size())
+    print("multiplication ", (p1_cluster*unfolded_tensor).size())
+
+
+    # Need to check calculating mu2  
+    mu2 = torch.sum(p1_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
+    
+    print("mu2 size: ",mu2.size())
+    # print("mu2 :",mu2)
+    
+    # / p2_points # pay attention divided by 0
+    # print("mu2 size : ",mu2.size())
+
+    w = alpha + (p1_points - 1) * (1-alpha) * (m*n-1)
+    print("w size : ",w.size())
 
     # print("w ",torch.isnan(w).any())
+    
+    # mu2 = p1_cluster
+    # w = 0
     
     return mu2, w
 
@@ -227,14 +285,17 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     
     gt = torch.unsqueeze(gt,dim=1)
 
-    print("kernel gt ",kernel.size(),gt.size())
+    # print("kernel gt ",kernel.size(),gt.size())
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
     mean_gt /= m * n
 
     # edge - 1  non edge - 0
+    print("gt: ",gt.size())
+    print("mean_gt: ",mean_gt.size())
+
     edge_mask = torch.abs(gt - mean_gt) > th1
 
-    print("gt ",torch.isnan(gt).any())
+    # print("gt ",torch.isnan(gt).any())
     dist1 = LaplaceDisp2Prob(maxDisp, gt, variance=1)
     non_edge_prob_dist = dist1.getProb()
 
@@ -242,13 +303,22 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # mu2 gt disp
     mu2, w = fetch_neighborhood_info(gt, m,n, th2, alpha)
     
-    print("mu2 ",torch.isnan(mu2).any())
+    # print("mu2 ",torch.isnan(mu2).any())
     dist2 = LaplaceDisp2Prob(maxDisp, mu2, variance=1)
 
-    print("Good until here") 
-    print("dist2 ",dist2)
+    print("w size: ",w.size()) 
+    print("non_edge_prob_dist size: ",non_edge_prob_dist.size()) 
+    # print("edge_mask size: ",edge_mask.size()) 
+    # print("edge_prob_dist size: ",edge_prob_dist.size()) 
+    
+
     # Equation on paper
     edge_prob_dist = w*non_edge_prob_dist + (1-w)*dist2.getProb()
+    
+
+    print("edge_mask size: ",edge_mask.size())    
+    print("non_edge_prob_dist size: ",non_edge_prob_dist.size())    
+    print("edge_prob_dist size: ",edge_prob_dist.size())    
 
     md_gt_dist = (~edge_mask) * non_edge_prob_dist + edge_mask * edge_prob_dist
 

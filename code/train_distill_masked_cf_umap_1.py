@@ -111,7 +111,7 @@ if args.resume:
     loadckpt = os.path.join(args.logdir, all_saved_ckpts[-1])
     print("loading the lastest model in logdir: {}".format(loadckpt))
     state_dict = torch.load(loadckpt)
-    print("state dict: ",state_dict)
+    # print("state dict: ",state_dict)
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
     start_epoch = state_dict['epoch'] + 1
@@ -119,7 +119,7 @@ elif args.loadckpt:
     # load the checkpoint file specified by args.loadckpt
     print("loading model {}".format(args.loadckpt))
     state_dict = torch.load(args.loadckpt)
-    print("state dict: ",state_dict)
+    # print("state dict: ",state_dict)
     model_dict = model.state_dict()
     pre_dict = {k: v for k, v in state_dict['model'].items() if k in model_dict}
     model_dict.update(pre_dict) 
@@ -309,7 +309,7 @@ def train_sample(sample, compute_metrics=False):
     # print("conv8 loss ",conv8_loss)
     # print("loss",loss)
 
-    # loss = loss + kd_loss
+    loss = loss + kd_loss
     # print("loss sum ",loss)
     
     
@@ -404,7 +404,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.5
+    thresh = 0.75
 
     if mask is not None:
         ma = mask.max()
