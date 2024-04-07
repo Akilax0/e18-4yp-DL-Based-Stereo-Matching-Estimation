@@ -2,6 +2,7 @@ import warnings
 
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 from .multimodal_losses import *
 
 
@@ -60,6 +61,7 @@ class Disp2Prob(object):
     def getProb(self):
         # [BatchSize, 1, Height, Width]
         b, c, h, w = self.gtDisp.shape
+        print("getProb inputs: ",b,c,h,w)
         assert c == 1
 
         # if start_disp = 0, dilation = 1, then generate disparity candidates as [0, 1, 2, ... , maxDisp-1]
@@ -114,6 +116,8 @@ class LaplaceDisp2Prob(Disp2Prob):
         scaled_distance = ((-torch.abs(self.index - self.gtDisp)) / self.variance)
         # print("scaled distance size: ",scaled_distance.size())
         probability = F.softmax(scaled_distance, dim=1)
+        
+        # print("prob: ", probability.size())
 
         return probability
 
@@ -279,20 +283,27 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
 def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # Getting batch size and channel of gt
     b,h,w = gt.size()
+    print("Ground Truth size: ",gt.size())
 
     # kernel = torch.ones(1, 1, m, n).to(gt.device)
     kernel = torch.ones(b,1, m, n).to(gt.device)
     
     gt = torch.unsqueeze(gt,dim=1)
 
-    # print("kernel gt ",kernel.size(),gt.size())
+    print("kernel gt ",kernel.size(),gt.size())
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
-    mean_gt /= m * n
+    print("mean_gt device:" , mean_gt.get_device())
 
-    # edge - 1  non edge - 0
+    # Reduce channels to 1 by 1x1 kernel
+    conv1x1 = nn.Conv2d(in_channels=10,out_channels=1,kernel_size=1).cuda()
+    mean_gt = conv1x1(mean_gt)
+    print("mean_gt device:" , mean_gt.get_device())
+
     print("gt: ",gt.size())
     print("mean_gt: ",mean_gt.size())
+    mean_gt = mean_gt / (m * n)
 
+    # edge - 1  non edge - 0
     edge_mask = torch.abs(gt - mean_gt) > th1
 
     # print("gt ",torch.isnan(gt).any())
@@ -305,22 +316,22 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     
     # print("mu2 ",torch.isnan(mu2).any())
     dist2 = LaplaceDisp2Prob(maxDisp, mu2, variance=1)
-
+    
     print("w size: ",w.size()) 
     print("non_edge_prob_dist size: ",non_edge_prob_dist.size()) 
     # print("edge_mask size: ",edge_mask.size()) 
     # print("edge_prob_dist size: ",edge_prob_dist.size()) 
-    
 
     # Equation on paper
     edge_prob_dist = w*non_edge_prob_dist + (1-w)*dist2.getProb()
-    
 
     print("edge_mask size: ",edge_mask.size())    
     print("non_edge_prob_dist size: ",non_edge_prob_dist.size())    
     print("edge_prob_dist size: ",edge_prob_dist.size())    
 
     md_gt_dist = (~edge_mask) * non_edge_prob_dist + edge_mask * edge_prob_dist
+    
+    print("md_gt_dist: ",md_gt_dist.size())
 
     return md_gt_dist
 

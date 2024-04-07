@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 import gc
 
 cudnn.benchmark = True
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Multi-modal extension of CGI-Stereo')
 parser.add_argument('--model', default='Multimodal_CGI', help='select a model structure', choices=__models__.keys())
@@ -181,6 +181,8 @@ def train_sample(sample, compute_metrics=False):
     loss = model_loss_train_v3(disp_ests, disp_gts, masks, model.maxdisp) #three level : 1, 1/2, 1/4
     '''
 
+    # masks are created to only have values between 0 and max disp
+    # 1 if within 0 if not 
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_4 = (disp_gt_4 < args.maxdisp) & (disp_gt_4 > 0)
     masks = [mask, mask_4]
