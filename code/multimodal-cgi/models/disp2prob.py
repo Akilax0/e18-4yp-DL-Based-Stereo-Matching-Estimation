@@ -2,6 +2,7 @@ import warnings
 
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 from .multimodal_losses import *
 
 
@@ -60,6 +61,7 @@ class Disp2Prob(object):
     def getProb(self):
         # [BatchSize, 1, Height, Width]
         b, c, h, w = self.gtDisp.shape
+        print("getProb inputs: ",b,c,h,w)
         assert c == 1
 
         # if start_disp = 0, dilation = 1, then generate disparity candidates as [0, 1, 2, ... , maxDisp-1]
@@ -114,6 +116,8 @@ class LaplaceDisp2Prob(Disp2Prob):
         scaled_distance = ((-torch.abs(self.index - self.gtDisp)) / self.variance)
         # print("scaled distance size: ",scaled_distance.size())
         probability = F.softmax(scaled_distance, dim=1)
+        
+        # print("prob: ", probability.size())
 
         return probability
 
@@ -178,31 +182,31 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
 
     # Unfold the padded tensor to extract neighborhoods
     unfolded_tensor = padded_tensor.unfold(2, neighborhood_size[0], 1).unfold(3,neighborhood_size[1],1)
-    print("unfolded tensor: " , unfolded_tensor.size())
-
+    print("unfolded tensor: " , unfolded_tensor.size()) # (20,1,64,128,1,9)
 
     # Extract central pixels from each neighborhood
     central_pixels = unfolded_tensor[:, :, :, :, 0, neighborhood_size[1] // 2].unsqueeze(-1).unsqueeze(-1)
-    print("Central pixels size: ", central_pixels.size())
+    print("Central pixels size: ", central_pixels.size()) # (20,1,64,128,1,1)
 
     # Calculate differences between central pixels and the rest of the neighborhood elements
     differences = torch.abs(unfolded_tensor - central_pixels)
-    print("Differences size: ",differences.size())
+    print("Differences size: ",differences.size()) # (20,1,64,128,1,9)
 
-    print("Differences: ",differences.size())
+    # thresh = 3 
+    # Check threshold and get P1(within threshold) as 1 and p2 as 0
+    p1_p2_cluster = torch.where(differences< thres,1, 0 )
+    print("p1_p2_cluster :",p1_p2_cluster.size() )
 
-    thresh = 3 
-
-    p1_cluster = torch.where(differences< thresh,1, 0 )
-    print("p1_cluster :",p1_cluster.size() )
-
-    p1_sum = torch.sum(p1_cluster, dim=-1).squeeze(-1)
+    # Get sum of p1 along last dimension (each neighbourhood) 
+    p1_sum = torch.sum(p1_p2_cluster, dim=-1).squeeze(-1)
     print("p1_sum: ",p1_sum.size())
 
+    # define tensor to hold p1 points 
     p1_points = torch.zeros_like(gtDisp)
     p1_points = p1_sum
-    # print("p1 cluster: ",p1_points)
+    print("p1 cluster: ",p1_points.size())
 
+    # the rest of the points from the neighbourhood assigned as p2 points
     p2_points = m*n - p1_points
 
     # print("p2_points :" , p2_points)
@@ -219,10 +223,6 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     #         print(f"Neighborhood at position ({i}, {j}) - Central pixel: {central_pixel:.2f}")
     #         print("Differences:")
     #         print(neighborhood_differences)
-
-
-
-     
 
     # # neighborhood = unfolded_gtDisp.view(b , m*n, h, w )
     # # neighborhood = unfolded_gtDisp.view(b , 1, h+m, w+n )
@@ -242,7 +242,7 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     # p1_count = total_count - p2_count
     
 
-    # adding small value to p2 
+    # adding small value to p2 to remove divide by 0 error
     p2_points = p2_points + 0.0001
     print("p2_count",p2_points.eq(0).any())
     
@@ -250,49 +250,53 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     # # what can we do here?
     # mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
 
-    print("p1_cluster size :",p1_cluster.size())    
+    print("p1_p2_cluster size :",p1_p2_cluster.size())    
     print("unfolded tensor size :",unfolded_tensor.size())    
     print("p2_points size",p2_points.size())
-    print("multiplication ", (p1_cluster*unfolded_tensor).size())
+    print("multiplication ", (p1_p2_cluster*unfolded_tensor).size())
 
 
     # Need to check calculating mu2  
-    mu2 = torch.sum(p1_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
+    mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
     
     print("mu2 size: ",mu2.size())
-    # print("mu2 :",mu2)
-    
-    # / p2_points # pay attention divided by 0
-    # print("mu2 size : ",mu2.size())
 
+    # As in paper
     w = alpha + (p1_points - 1) * (1-alpha) * (m*n-1)
     print("w size : ",w.size())
 
-    # print("w ",torch.isnan(w).any())
-    
-    # mu2 = p1_cluster
-    # w = 0
-    
     return mu2, w
 
 
 def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # Getting batch size and channel of gt
     b,h,w = gt.size()
+    print("Ground Truth size: ",gt.size())
 
     # kernel = torch.ones(1, 1, m, n).to(gt.device)
     kernel = torch.ones(b,1, m, n).to(gt.device)
-    
+
+    # increase dimension to include disparity
     gt = torch.unsqueeze(gt,dim=1)
 
-    # print("kernel gt ",kernel.size(),gt.size())
+    print("kernel gt ",kernel.size(),gt.size())
+    
+    # Convolve singular kernel by conv2d on padded ground truth
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
-    mean_gt /= m * n
+    print("mean_gt device:" , mean_gt.get_device())
 
-    # edge - 1  non edge - 0
+    # Reduce channels to 1 by 1x1 kernel
+    conv1x1 = nn.Conv2d(in_channels=10,out_channels=1,kernel_size=1).cuda()
+    mean_gt = conv1x1(mean_gt)
+
+    print("mean_gt device:" , mean_gt.get_device())
+
     print("gt: ",gt.size())
     print("mean_gt: ",mean_gt.size())
+    # Calculate mean
+    mean_gt = mean_gt / (m * n)
 
+    # edge - 1  non edge - 0
     edge_mask = torch.abs(gt - mean_gt) > th1
 
     # print("gt ",torch.isnan(gt).any())
@@ -305,22 +309,22 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     
     # print("mu2 ",torch.isnan(mu2).any())
     dist2 = LaplaceDisp2Prob(maxDisp, mu2, variance=1)
-
+    
     print("w size: ",w.size()) 
     print("non_edge_prob_dist size: ",non_edge_prob_dist.size()) 
     # print("edge_mask size: ",edge_mask.size()) 
     # print("edge_prob_dist size: ",edge_prob_dist.size()) 
-    
 
     # Equation on paper
     edge_prob_dist = w*non_edge_prob_dist + (1-w)*dist2.getProb()
-    
 
     print("edge_mask size: ",edge_mask.size())    
     print("non_edge_prob_dist size: ",non_edge_prob_dist.size())    
     print("edge_prob_dist size: ",edge_prob_dist.size())    
 
     md_gt_dist = (~edge_mask) * non_edge_prob_dist + edge_mask * edge_prob_dist
+    
+    print("md_gt_dist: ",md_gt_dist.size())
 
     return md_gt_dist
 

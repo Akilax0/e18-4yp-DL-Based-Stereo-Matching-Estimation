@@ -246,7 +246,7 @@ class Multimodal_CGI(nn.Module):
         # max_prob [20,64,128]
         # max_indices [20,64,128]
         # left_bound [20,64,128]
-        # left_bound [20,64,128]
+        # right_bound [20,64,128]
         # left_bound[max_indices] [20,64,128,64,128]
 
         max_probs, max_indices = torch.max(prob, dim=1)
@@ -254,60 +254,134 @@ class Multimodal_CGI(nn.Module):
         right_bound = torch.zeros_like(max_indices)
 
 
-        #Iterate through the probability levels
-        for i in range(prob.size(1)):
-            print("prob: ",i,prob[0,i,:,:]) 
+        batch_prob = prob[:,:,:,:]
+
+        # print("prob: ",batch_prob)
+
+        # Caluclating right bounds
+        # print("current channel: ", batch_prob[:,:-1,:,:])
+        # print("next channel: ", batch_prob[:,1:,:,:])
+        print("max indices: ",max_indices)
+
+        right_bounds = torch.ones_like(prob)
+        right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
+        # print("Right Bounds: ",right_bounds)
+
+        # Find the positions of FAlSE 
+        true_locations = torch.nonzero(right_bounds == True)
+        true_locations = torch.flip(true_locations,dims=[0])
+
+        # Setting right bound to max disp 
+        right_bound = right_bound + (self.max_disp-1)
+
+        t0 = true_locations[:,0]
+        t1 = true_locations[:,1]
+        t2 = true_locations[:,2]
+        t3 = true_locations[:,3]
+
+        update_values = right_bound[t0,t2,t3]
+
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        differences = t1-max_indices[t0,t2,t3]
+        mask = differences >= 0
+        update_values = update_values[mask]
+        t0 = t0[mask]
+        t1 = t1[mask]
+        t2 = t2[mask]
+        t3 = t3[mask]
+
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        # Need to figure out a way to do this in one go 
+        # Rather than repeatedly updating need to select the min so far
+        # update_values = torch.minimum(t1,update_values) * ((t1 - max_indices[t0,t2,t3])>=0) 
+        # Adding and removing one to differnetiate between mask and actual 0
+        update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
+        # print("updated value: ",update_values)
+
+        update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
+        # print("updated value: ",update_values)
+
+        right_bound[t0,t2,t3] = update_values
+
+        # print("right bound: ",right_bound)
+
+        # Calculating Left bounds
+        left_bounds = torch.ones_like(prob)
+        left_bounds[:,1:,:,:] = batch_prob[:,1:,:,:]<batch_prob[:,:-1,:,:]
+        # print("Left Bounds: ",left_bounds)
+
+        # Find the positions of FAlSE 
+        true_locations = torch.nonzero(left_bounds == True)
+        # print("True Locations (Right): ",len(true_locations))
+
+        # # print("Left bound: ",left_bound)
+        t0 = true_locations[:,0]
+        t1 = true_locations[:,1]
+        t2 = true_locations[:,2]
+        t3 = true_locations[:,3]
+
+        update_values = left_bound[t0,t2,t3]
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        differences = max_indices[t0,t2,t3] - t1
+        mask = differences >= 0
+        update_values = update_values[mask]
+        t0 = t0[mask]
+        t1 = t1[mask]
+        t2 = t2[mask]
+        t3 = t3[mask]
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        update_values = torch.maximum(t1,update_values)
+        #* (( max_indices[t0,t2,t3] - t1)>=0) 
+        update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
+
+        left_bound[t0,t2,t3] = update_values
+
+        # print("left bound: ",left_bound)
+
+
+#==========================================================================================================================
+
+# NAIVE APPROACH
+
+        # # prob [20,48,64,128]
+        # # max_prob [20,64,128]
+        # # max_indices [20,64,128]
+        # # left_bound [20,64,128]
+        # # right_bound [20,64,128]
+        # for c in range(prob.size(0)):
+        #     for i in range(prob.size(2)):
+        #         for j in range(prob.size(3)):
+
+        #             # ma_d = max_probs[c,i,j]
+        #             ma_x = max_indices[c,i,j]
+        #             right = ma_x
+
+        #             for d in range(ma_x+1,prob.size(1)):
+        #                 if(prob[c,d,i,j]<=prob[c,d-1,i,j]):
+        #                     right = d
+        #                 else:
+        #                     break;
+
+        #             right_bound[c,i,j] = right
             
-            # This gives dominant peak at each disparity level
-            ma_prob = torch.max(prob[0,i,:,:])
-            print("max_prob: ",ma_prob)
+        #             left = ma_x
 
-        print("Debug: max_probs, max_indices, left_bound, right_bound , left_bound[0]", max_probs.size(),max_indices.size(),left_bound.size(),right_bound.size(),left_bound[0].size())
+        #             for d in range(ma_x-1,0,-1):
+        #                 if(prob[c,d,i,j]<=prob[c,d+1,i,j]):
+        #                     left = d
+        #                 else:
+        #                     break;
 
-        # #Traverse right to find left bound
-        # for i in range(prob.size(2)):
-        #     # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-        #     left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-        #                                              left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+        #             left_bound[c,i,j] = left
 
-        # # Traverse left to find right bound
-        # for i in range(prob.size(2)-1, -1, -1):
-        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-            
-
-        # Iteration happens in the disparity dimension
-        #Traverse right to find left bound
-        for i in range(prob.size(2)):
-            for j in range(prob.size(3)):
-                # Iterating through the cells
-                
-                # max disp for all channels
-                max_disp = max_probs[:,i,j]
-                max_pos = max_indices[:,i,j]
-
-                print("Max Disp size , pos: ",max_disp.size(),max_pos.size())
-                print("spatial position:",i,j)
-                print("Max pos: ",max_pos)
-                print("Max disp: ",max_disp)
-
-                a = max_disp
-
-                # for k1 in range(max_pos[0]+1,prob.size(1)):
-                #     if(a>max_)
+        #             # print("Bounds for pixel i,j, left, right, max: ",i,j,left,right,ma_x) 
 
 
-
-            # # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-            # left_bound[i]=torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-            #                                          left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-
-        # # Traverse left to find right bound
-        # for i in range(prob.size(1)-1, -1, -1):
-        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+#==========================================================================================================================
             
         return max_probs, max_indices, left_bound, right_bound
 
@@ -319,23 +393,53 @@ class Multimodal_CGI(nn.Module):
         _, d2, h2, w2 = disp_samples.shape
 
         assert d==d2 and h==h2 and w==w2
-        print("All dimensions ",d,h,w,d2,h2,w2)
+        # print("All dimensions ",d,h,w,d2,h2,w2)
 
         # removing cum prob along disparity dimension
         # What we want to implement is faster left and right bounds
         # cumulative_prob = torch.cumsum(prob_dist, dim=1)
-        cumulative_prob = prob_dist
+        
+        # This has to be changed to getting cumulativve neighbourhood
+        # cumulative_prob = prob_dist
+
+        shift_right = torch.zeros_like(prob_dist)        
+        shift_left = torch.zeros_like(prob_dist)        
+
+
+        # Adding the neighbourhood of 1 have to get a param here to adjust
+        shift_right[:,1:,:,:] = prob_dist[:,1:,:,:]
+        shift_left[:,:-1,:,:] = prob_dist[:,:-1,:,:]
+        cumulative_prob = shift_left + shift_right + prob_dist
+        
+        print("cum prob:", cumulative_prob.size())
 
         # Working on calculating the bounds        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
 
-        print("===============Cumulative prob generated ===================")
-        for i in range(w):
-            prob_dist[:, max_indices, :, torch.where(torch.arange(n).unsqueeze(1) == max_indices & ((torch.arange(w) < left_bound[max_indices].unsqueeze(1)) | (torch.arange(w) > right_bound.unsqueeze(1))), True, False)]=0.0
+
+        n, d, h, w = prob_dist.size()
+
+        # Expand left_bound and right_bound to match the dimensions of prob_dist
+        left_bound_expanded = left_bound.unsqueeze(1).expand(n, d, h, w)
+        right_bound_expanded = right_bound.unsqueeze(1).expand(n, d, h, w)
+
+        # Create masks for values outside the bounds
+        left_mask = prob_dist < left_bound_expanded
+        right_mask = prob_dist > right_bound_expanded
+        outside_bounds_mask = left_mask | right_mask
+
+        # This inverts the binary values
+        outside_bounds_mask = ~outside_bounds_mask 
+        # print("outside_bounds mask: ",outside_bounds_mask.size())
+        # Zero out values outside the bounds
+        # prob_dist[outside_bounds_mask] = 0
+        prob_dist = prob_dist * outside_bounds_mask
 
         renormalized_prob = F.softmax(prob_dist, dim=1)
 
         final_pred_disp = torch.sum(renormalized_prob * disp_samples, dim=1, keepdim=True)
+        
+        # print("final pred disp: ",final_pred_disp.size())
 
         return final_pred_disp
 
@@ -374,32 +478,32 @@ class Multimodal_CGI(nn.Module):
         disp_samples_4 = torch.arange(0, self.maxdisp//4, dtype=cost_4.dtype, device=cost_4.device) #(48,)
         disp_samples_4 = disp_samples_4.view(1, self.maxdisp//4, 1, 1).repeat(cost_4.shape[0],1,cost_4.shape[3],cost_4.shape[4]) #disp_samples.view(1, self.maxdisp//4, 1, 1)=(1, 48, 1, 1), cost = (20,1, 48, 64, 128), disp_samples = (20, 48, 64, 128)
 
-        # Comment wen using III.C 
-        #get prediction at 1/4
-        # Squeeze removes the channel dimension 
-        # The cost volume is at 1/4
-        pred_4 = regression_topk(cost_4.squeeze(1), disp_samples_4, 2) # cost.squeeze(1) = (20, 48, 64, 128)
-        pred_4_up = context_upsample(pred_4, spx_pred)
-
-        if self.training:
-            return [pred_4_up*4, pred_4.squeeze(1)*4]
-
-        else:
-            return [pred_4_up*4]
-
-
-
-        # #get distribution and top k candidates at 1/4
-        # full_band_prob_4, disp_candidates_topk_4, renormalized_prob_topk_4 = get_prob_and_disp_topk(cost_4.squeeze(1), disp_samples_4, self.k)
-
-        # #idea from Section III.C
-        # # Whatever happens happens here
-        # pred_dominant_modal_4 = self.select_dominant_modal_disparity(full_band_prob_4, disp_samples_4)
-
-        # pred_dominant_modal_4_up = context_upsample(pred_dominant_modal_4, spx_pred)  # pred_up = [n, h, w]
+        # # Comment wen using III.C 
+        # #get prediction at 1/4
+        # # Squeeze removes the channel dimension 
+        # # The cost volume is at 1/4
+        # pred_4 = regression_topk(cost_4.squeeze(1), disp_samples_4, 2) # cost.squeeze(1) = (20, 48, 64, 128)
+        # pred_4_up = context_upsample(pred_4, spx_pred)
 
         # if self.training:
-        #     return [pred_dominant_modal_4_up * 4, pred_dominant_modal_4.squeeze(1) * 4]
+        #     return [pred_4_up*4, pred_4.squeeze(1)*4]
+
         # else:
-        #     return [pred_dominant_modal_4_up * 4]
+        #     return [pred_4_up*4]
+
+
+
+        #get distribution and top k candidates at 1/4
+        full_band_prob_4, disp_candidates_topk_4, renormalized_prob_topk_4 = get_prob_and_disp_topk(cost_4.squeeze(1), disp_samples_4, self.k)
+
+        #idea from Section III.C
+        # Whatever happens happens here
+        pred_dominant_modal_4 = self.select_dominant_modal_disparity(full_band_prob_4, disp_samples_4)
+
+        pred_dominant_modal_4_up = context_upsample(pred_dominant_modal_4, spx_pred)  # pred_up = [n, h, w]
+
+        if self.training:
+            return [pred_dominant_modal_4_up * 4, pred_dominant_modal_4.squeeze(1) * 4]
+        else:
+            return [pred_dominant_modal_4_up * 4]
 
