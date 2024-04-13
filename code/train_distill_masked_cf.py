@@ -251,7 +251,7 @@ def train_sample(sample, compute_metrics=False):
     conv4_loss = 0 
     conv8_loss = 0
     
-    lambda_feat = 0.010
+    lambda_feat = 0.001
     lambda_cvolume = 0 
     lambda_conv4 = 0 
     lambda_conv8 = 0 
@@ -261,31 +261,31 @@ def train_sample(sample, compute_metrics=False):
     # classificatio = 0.5
     # semantic = 0.75
     # detection / instance - 0.45
-    lambda_mgd = 0
+    lambda_mgd = 0.50
 
-    # feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd)  
     
 
-    # feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd)  
-    # feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd)  
 
 
     # MSE error
-    feat_loss = feat_loss + KD_feat_loss(s_ll[0],t_ll[1])
-    feat_loss = feat_loss + KD_feat_loss(s_ll[1],t_ll[2])
-    feat_loss = feat_loss + KD_feat_loss(s_ll[2],t_ll[3])
-    feat_loss = feat_loss + KD_feat_loss(s_ll[3],t_ll[4])
+    # feat_loss = feat_loss + 0.001*KD_feat_loss(s_ll[0],t_ll[1])
+    # feat_loss = feat_loss + 0.0001*KD_feat_loss(s_ll[1],t_ll[2])
+    # feat_loss = feat_loss + 0.00001*KD_feat_loss(s_ll[2],t_ll[3])
+    # feat_loss = feat_loss + 0.000001*KD_feat_loss(s_ll[3],t_ll[4])
 
     
-    feat_loss = feat_loss + KD_feat_loss(s_rl[0],t_rl[1])
-    feat_loss = feat_loss + KD_feat_loss(s_rl[1],t_rl[2])
-    feat_loss = feat_loss + KD_feat_loss(s_rl[2],t_rl[3])
-    feat_loss = feat_loss + KD_feat_loss(s_rl[3],t_rl[4])
+    # feat_loss = feat_loss + 0.001*KD_feat_loss(s_rl[0],t_rl[1])
+    # feat_loss = feat_loss + 0.0001*KD_feat_loss(s_rl[1],t_rl[2])
+    # feat_loss = feat_loss + 0.00001*KD_feat_loss(s_rl[2],t_rl[3])
+    # feat_loss = feat_loss + 0.000001*KD_feat_loss(s_rl[3],t_rl[4])
     
 
 
@@ -298,7 +298,7 @@ def train_sample(sample, compute_metrics=False):
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
 
-    kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
+    kd_loss = kd_loss + lambda_feat*feat_loss + lambda_cvolume * cvolume_loss + \
         lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss
         
     # print("feature loss ",feat_loss)
@@ -380,7 +380,6 @@ def align(student,student_channels,teacher_channels):
     return m(student)
 
 def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
-
 
     N, C, H, W = preds_T.shape
 
