@@ -187,7 +187,8 @@ def train_sample(sample, compute_metrics=False):
     mask_4 = (disp_gt_4 < args.maxdisp) & (disp_gt_4 > 0)
     masks = [mask, mask_4]
     disp_gts = [disp_gt, disp_gt_4]
-    
+
+    # with torch.autograd.detect_anomaly():
     # Checck here implementation of III.B 
     # Was model.maxdisp -> changed to args.maxdisp
     loss = model_loss_train_v2(disp_ests, disp_gts, masks, args.maxdisp)  # two level: 1, 1/4
@@ -205,6 +206,9 @@ def train_sample(sample, compute_metrics=False):
             # scalar_outputs["Thres1"] = [Thres_metric(disp_est, disp_gt, mask, 1.0) for disp_est in disp_ests_final]
             # scalar_outputs["Thres2"] = [Thres_metric(disp_est, disp_gt, mask, 2.0) for disp_est in disp_ests_final]
             # scalar_outputs["Thres3"] = [Thres_metric(disp_est, disp_gt, mask, 3.0) for disp_est in disp_ests_final]
+
+    # print("Fine till here")
+
     loss.backward()
     optimizer.step()
 

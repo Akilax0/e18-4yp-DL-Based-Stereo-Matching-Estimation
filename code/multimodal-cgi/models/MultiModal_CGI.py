@@ -254,131 +254,134 @@ class Multimodal_CGI(nn.Module):
         right_bound = torch.zeros_like(max_indices)
 
 
-        # #Iterate through the probability levels
-        # for i in range(prob.size(1)):
-        #     print("prob: ",i,prob[0,i,:,:]) 
-            
-        print("Debug: max_probs, max_indices, left_bound, right_bound , left_bound[0]", max_probs.size(),max_indices.size(),left_bound.size(),right_bound.size(),left_bound[0].size())
-        # We have max disparity level at each pixel location to find right bound have to go until non decreasing
+        batch_prob = prob[:,:,:,:]
 
-        # prob [20,48,64,128]
-        # max_prob [20,64,128]
-        # max_indices [20,64,128]
-        # left_bound [20,64,128]
-        # right_bound [20,64,128]
-        for c in range(prob.size(0)):
-            for i in range(prob.size(2)):
-                for j in range(prob.size(3)):
+        # print("prob: ",batch_prob)
 
-                    # ma_d = max_probs[c,i,j]
-                    ma_x = max_indices[c,i,j]
-                    right = ma_x
+        # Caluclating right bounds
+        # print("current channel: ", batch_prob[:,:-1,:,:])
+        # print("next channel: ", batch_prob[:,1:,:,:])
+        print("max indices: ",max_indices)
 
-                    for d in range(ma_x+1,prob.size(1)):
-                        if(prob[c,d,i,j]<=prob[c,d-1,i,j]):
-                            right = d
-                        else:
-                            break;
+        right_bounds = torch.ones_like(prob)
+        right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
+        # print("Right Bounds: ",right_bounds)
 
-                    right_bound[c,i,j] = right
-            
-                    left = ma_x
+        # Find the positions of FAlSE 
+        true_locations = torch.nonzero(right_bounds == True)
+        true_locations = torch.flip(true_locations,dims=[0])
 
-                    for d in range(ma_x-1,0,-1):
-                        if(prob[c,d,i,j]<=prob[c,d+1,i,j]):
-                            left = d
-                        else:
-                            break;
+        # Setting right bound to max disp 
+        right_bound = right_bound + (self.max_disp-1)
 
-                    left_bound[c,i,j] = left
+        t0 = true_locations[:,0]
+        t1 = true_locations[:,1]
+        t2 = true_locations[:,2]
+        t3 = true_locations[:,3]
+
+        update_values = right_bound[t0,t2,t3]
+
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        differences = t1-max_indices[t0,t2,t3]
+        mask = differences >= 0
+        update_values = update_values[mask]
+        t0 = t0[mask]
+        t1 = t1[mask]
+        t2 = t2[mask]
+        t3 = t3[mask]
+
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        # Need to figure out a way to do this in one go 
+        # Rather than repeatedly updating need to select the min so far
+        # update_values = torch.minimum(t1,update_values) * ((t1 - max_indices[t0,t2,t3])>=0) 
+        # Adding and removing one to differnetiate between mask and actual 0
+        update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
+        # print("updated value: ",update_values)
+
+        update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
+        # print("updated value: ",update_values)
+
+        right_bound[t0,t2,t3] = update_values
+
+        # print("right bound: ",right_bound)
+
+        # Calculating Left bounds
+        left_bounds = torch.ones_like(prob)
+        left_bounds[:,1:,:,:] = batch_prob[:,1:,:,:]<batch_prob[:,:-1,:,:]
+        # print("Left Bounds: ",left_bounds)
+
+        # Find the positions of FAlSE 
+        true_locations = torch.nonzero(left_bounds == True)
+        # print("True Locations (Right): ",len(true_locations))
+
+        # # print("Left bound: ",left_bound)
+        t0 = true_locations[:,0]
+        t1 = true_locations[:,1]
+        t2 = true_locations[:,2]
+        t3 = true_locations[:,3]
+
+        update_values = left_bound[t0,t2,t3]
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        differences = max_indices[t0,t2,t3] - t1
+        mask = differences >= 0
+        update_values = update_values[mask]
+        t0 = t0[mask]
+        t1 = t1[mask]
+        t2 = t2[mask]
+        t3 = t3[mask]
+        # print("updated_values: ",update_values,t0,t1,t2,t3)
+
+        update_values = torch.maximum(t1,update_values)
+        #* (( max_indices[t0,t2,t3] - t1)>=0) 
+        update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
+
+        left_bound[t0,t2,t3] = update_values
+
+        # print("left bound: ",left_bound)
 
 
+#==========================================================================================================================
 
-                    print("Bounds for pixel i,j, left, right, max: ",i,j,left,right,ma_x) 
+# NAIVE APPROACH
 
-
-         # ===================================================================================================================
-
-        # # Calculate the range of indices along the second dimension (48)
-        # indices_range = torch.arange(prob.size(1), device=prob.device)
-
-        # # Calculate right bounds
-        # prob_shifted_right = prob[:, :, :, 1:].clone()  # Shift probabilities to the right along the third dimension
-        # right_mask = prob_shifted_right <= prob[:, :, :, :-1]  # Mask where the shifted probabilities are less than or equal to the original ones
-        # right_bound = right_mask.sum(dim=1).add(1)  # Count the number of True values along the second dimension and add 1
-        # right_bound = torch.min(right_bound, torch.tensor(prob.size(1), device=prob.device))  # Clip the values to avoid going out of bounds
-
-        # # Calculate left bounds
-        # prob_shifted_left = prob[:, :, :, :-1].clone()  # Shift probabilities to the left along the third dimension
-        # left_mask = prob_shifted_left <= prob[:, :, :, 1:]  # Mask where the shifted probabilities are less than or equal to the original ones
-        # left_bound = left_mask.sum(dim=1)  # Count the number of True values along the second dimension
-
-        # # Print bounds (optional)
-        # left_bound = torch.clamp(left_bound, max=prob.size(1) - 1)  # Clamp the values to avoid going out of bounds
+        # # prob [20,48,64,128]
+        # # max_prob [20,64,128]
+        # # max_indices [20,64,128]
+        # # left_bound [20,64,128]
+        # # right_bound [20,64,128]
         # for c in range(prob.size(0)):
         #     for i in range(prob.size(2)):
         #         for j in range(prob.size(3)):
-        #             ma_x = max_indices[c, i, j]
-        #             left = left_bound[c, i, j]
-        #             right = right_bound[c, i, j]
-        #             print("Bounds for pixel i,j, left, right, max:", i, j, left.item(), right.item(), ma_x.item())
 
-        # # Assign to left_bound and right_bound tensors (if needed)
-        # left_bound = left_bound.unsqueeze(1)  # Add singleton dimension for broadcasting
-        # right_bound = right_bound.unsqueeze(1)  # Add singleton dimension for broadcasting
-        
-        # print("left and right sizes: ",left_bound.size(), right_bound.size())
-        
-         # ===================================================================================================================
+        #             # ma_d = max_probs[c,i,j]
+        #             ma_x = max_indices[c,i,j]
+        #             right = ma_x
 
+        #             for d in range(ma_x+1,prob.size(1)):
+        #                 if(prob[c,d,i,j]<=prob[c,d-1,i,j]):
+        #                     right = d
+        #                 else:
+        #                     break;
 
-        # #Traverse right to find left bound
-        # for i in range(prob.size(2)):
-        #     # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-                 
+        #             right_bound[c,i,j] = right
             
-            
-            # torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-            #                                          left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
+        #             left = ma_x
 
-        # # Traverse left to find right bound
-        # for i in range(prob.size(2)-1, -1, -1):
-        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-            
+        #             for d in range(ma_x-1,0,-1):
+        #                 if(prob[c,d,i,j]<=prob[c,d+1,i,j]):
+        #                     left = d
+        #                 else:
+        #                     break;
 
-        # Iteration happens in the disparity dimension
-        #Traverse right to find left bound
-        # for i in range(prob.size(2)):
-        #     for j in range(prob.size(3)):
-        #         # Iterating through the cells
-                
-        #         # max disp for all channels
-        #         max_disp = max_probs[:,i,j]
-        #         max_pos = max_indices[:,i,j]
+        #             left_bound[c,i,j] = left
 
-        #         print("Max Disp size , pos: ",max_disp.size(),max_pos.size())
-        #         print("spatial position:",i,j)
-        #         print("Max pos: ",max_pos)
-        #         print("Max disp: ",max_disp)
-
-        #         a = max_disp
-
-        #         # for k1 in range(max_pos[0]+1,prob.size(1)):
-        #         #     if(a>max_)
+        #             # print("Bounds for pixel i,j, left, right, max: ",i,j,left,right,ma_x) 
 
 
-
-            # # left_bound[max_indices]=torch.where(prob[torch.arange(prob.size(0)), max_indices, left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-            # left_bound[i]=torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-            #                                          left_bound[max_indices], torch.arange(prob.size(3))] < max_probs, left_bound[max_indices], left_bound[max_indices] - 1)
-
-        # # Traverse left to find right bound
-        # for i in range(prob.size(1)-1, -1, -1):
-        #     # right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
-        #     right_bound[max_indices] = torch.where(prob[torch.arange(prob.size(0)), max_indices, \
-        #                                       right_bound[max_indices], torch.arange(prob.size(3))] < max_probs, right_bound[max_indices],right_bound[max_indices] + 1)
+#==========================================================================================================================
             
         return max_probs, max_indices, left_bound, right_bound
 
@@ -390,26 +393,29 @@ class Multimodal_CGI(nn.Module):
         _, d2, h2, w2 = disp_samples.shape
 
         assert d==d2 and h==h2 and w==w2
-        print("All dimensions ",d,h,w,d2,h2,w2)
+        # print("All dimensions ",d,h,w,d2,h2,w2)
 
         # removing cum prob along disparity dimension
         # What we want to implement is faster left and right bounds
         # cumulative_prob = torch.cumsum(prob_dist, dim=1)
-        cumulative_prob = prob_dist
+        
+        # This has to be changed to getting cumulativve neighbourhood
+        # cumulative_prob = prob_dist
+
+        shift_right = torch.zeros_like(prob_dist)        
+        shift_left = torch.zeros_like(prob_dist)        
+
+
+        # Adding the neighbourhood of 1 have to get a param here to adjust
+        shift_right[:,1:,:,:] = prob_dist[:,1:,:,:]
+        shift_left[:,:-1,:,:] = prob_dist[:,:-1,:,:]
+        cumulative_prob = shift_left + shift_right + prob_dist
+        
+        print("cum prob:", cumulative_prob.size())
 
         # Working on calculating the bounds        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
 
-        print("===============Cumulative prob generated ===================")
-        # for i in range(w):
-        #     prob_dist[:, max_indices, :, torch.where(torch.arange(n).unsqueeze(1) == max_indices & ((torch.arange(w) < left_bound[max_indices].unsqueeze(1)) | (torch.arange(w) > right_bound.unsqueeze(1))), True, False)]=0.0
-
-        # for c in range(n):
-        #     for i in range(h):
-        #         for j in range(w):
-        #             for k in range(d):
-        #                 if(prob_dist[c,k,i,j] < left_bound[c,i,j] or prob_dist[c,k,i,j] > right_bound[c,i,j] ):
-        #                     prob_dist[c,k,i,j] = 0
 
         n, d, h, w = prob_dist.size()
 
@@ -422,12 +428,18 @@ class Multimodal_CGI(nn.Module):
         right_mask = prob_dist > right_bound_expanded
         outside_bounds_mask = left_mask | right_mask
 
+        # This inverts the binary values
+        outside_bounds_mask = ~outside_bounds_mask 
+        # print("outside_bounds mask: ",outside_bounds_mask.size())
         # Zero out values outside the bounds
-        prob_dist[outside_bounds_mask] = 0
+        # prob_dist[outside_bounds_mask] = 0
+        prob_dist = prob_dist * outside_bounds_mask
 
         renormalized_prob = F.softmax(prob_dist, dim=1)
 
         final_pred_disp = torch.sum(renormalized_prob * disp_samples, dim=1, keepdim=True)
+        
+        # print("final pred disp: ",final_pred_disp.size())
 
         return final_pred_disp
 

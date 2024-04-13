@@ -2,33 +2,143 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-m = 1
-n = 9
+prob = torch.randn((2,5,2,2))
+max_disp = 5
+# print("prob: ",prob)
 
-# Define a custom convolutional kernel for computing absolute differences
-# kernel = torch.tensor([[1, 1, 1, 1, -8, 1, 1, 1, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-# kernel = torch.tensor([[1, 1, 1], 
-#                        [1, -8, 1], 
-#                        [1, 1, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+b,d,h,w = prob.size()
 
-# # Example input tensor (1 batch, 1 channel, 5x5)
-# input_tensor = torch.tensor([[2, 1, 7, 4, 5],
-#                              [1, 3, 5, 9, 10],
-#                              [2, 6, 1, 14, 15],
-#                              [16, 17, 18, 19, 20],
-#                              [21, 22, 23, 24, 25]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+max_probs , max_indices = torch.max(prob, dim=1)
+left_bound = torch.zeros_like(max_indices)
+right_bound = torch.zeros_like(max_indices)
 
+# print("All dimensions prob, max_probs, max_indices, left_bound, right_bound : ",prob.size(), max_probs.size(),max_indices.size(), left_bound.size(),right_bound.size())
+# print("Max Indices: ",max_indices)
 
-kernel = torch.randn((10,1,1,9))
-input_tensor = torch.randn((10,1,64,128))
+batch_prob = prob[:,:,:,:]
 
-print("kernel :",kernel.size())
-print("Input tensor:",input_tensor.size())
-# print(input_tensor)
+print("prob: ",batch_prob)
 
-mean_gt = F.conv2d(input_tensor, kernel, padding=(m // 2, n // 2))
-# mean_gt = F.conv2d(input_tensor, kernel)
-print("mean_gt",mean_gt.size())
-# print(mean_gt)
+# Caluclating right bounds
+# print("current channel: ", batch_prob[:,:-1,:,:])
+# print("next channel: ", batch_prob[:,1:,:,:])
+print("max indices: ",max_indices)
 
-# mean_gt /= m * n
+right_bounds = torch.ones_like(prob)
+right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
+# print("Right Bounds: ",right_bounds)
+
+# Find the positions of FAlSE 
+true_locations = torch.nonzero(right_bounds == True)
+true_locations = torch.flip(true_locations,dims=[0])
+
+# Setting right bound to max disp 
+right_bound = right_bound + (max_disp-1)
+
+t0 = true_locations[:,0]
+t1 = true_locations[:,1]
+t2 = true_locations[:,2]
+t3 = true_locations[:,3]
+
+update_values = right_bound[t0,t2,t3]
+
+# print("updated_values: ",update_values,t0,t1,t2,t3)
+
+differences = t1-max_indices[t0,t2,t3]
+mask = differences >= 0
+update_values = update_values[mask]
+t0 = t0[mask]
+t1 = t1[mask]
+t2 = t2[mask]
+t3 = t3[mask]
+
+# print("updated_values: ",update_values,t0,t1,t2,t3)
+
+# Need to figure out a way to do this in one go 
+# Rather than repeatedly updating need to select the min so far
+# update_values = torch.minimum(t1,update_values) * ((t1 - max_indices[t0,t2,t3])>=0) 
+# Adding and removing one to differnetiate between mask and actual 0
+update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
+# print("updated value: ",update_values)
+
+update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
+# print("updated value: ",update_values)
+
+right_bound[t0,t2,t3] = update_values
+
+print("right bound: ",right_bound)
+
+# Calculating Left bounds
+left_bounds = torch.ones_like(prob)
+left_bounds[:,1:,:,:] = batch_prob[:,1:,:,:]<batch_prob[:,:-1,:,:]
+# print("Left Bounds: ",left_bounds)
+
+# Find the positions of FAlSE 
+true_locations = torch.nonzero(left_bounds == True)
+# print("True Locations (Right): ",len(true_locations))
+
+# # print("Left bound: ",left_bound)
+t0 = true_locations[:,0]
+t1 = true_locations[:,1]
+t2 = true_locations[:,2]
+t3 = true_locations[:,3]
+
+update_values = left_bound[t0,t2,t3]
+# print("updated_values: ",update_values,t0,t1,t2,t3)
+
+differences = max_indices[t0,t2,t3] - t1
+mask = differences >= 0
+update_values = update_values[mask]
+t0 = t0[mask]
+t1 = t1[mask]
+t2 = t2[mask]
+t3 = t3[mask]
+# print("updated_values: ",update_values,t0,t1,t2,t3)
+
+update_values = torch.maximum(t1,update_values)
+#* (( max_indices[t0,t2,t3] - t1)>=0) 
+update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
+
+left_bound[t0,t2,t3] = update_values
+
+print("left bound: ",left_bound)
+
+# print("True Locations (Right): ",true_locations)
+# =======================================================================================
+
+# # prob [20,48,64,128]
+# # max_prob [20,64,128]
+# # max_indices [20,64,128]
+# # left_bound [20,64,128]
+# # right_bound [20,64,128]
+# for c in range(prob.size(0)):
+#     for i in range(prob.size(2)):
+#         for j in range(prob.size(3)):
+
+#             # ma_d = max_probs[c,i,j]
+#             ma_x = max_indices[c,i,j]
+#             right = ma_x
+#             print("max index: ",ma_x)
+
+#             for d in range(ma_x+1,prob.size(1)):
+#                 if(prob[c,d,i,j]<=prob[c,d-1,i,j]):
+#                     right = d
+#                 else:
+#                     break;
+
+#             right_bound[:,i,j] = right
+
+            # left = ma_x
+
+            # for d in range(ma_x-1,0,-1):
+            #     if(prob[:,d,i,j]<=prob[:,d+1,i,j]):
+            #         left = d
+            #     else:
+            #         break;
+
+            # left_bound[:,i,j] = left
+            
+            # print("left_bound, right_bound, right, left: ",left_bound.size(), right_bound.size(), left.size(), right.size())
+            
+
+# ======================================================================================================

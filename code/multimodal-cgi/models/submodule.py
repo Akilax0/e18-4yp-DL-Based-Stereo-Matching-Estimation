@@ -332,7 +332,7 @@ def get_prob_and_disp_topk(cost, disparity_samples, k): #cost = (20,48,64,128), 
     
 
     # Outputing 3 values here but the only thing being used is the full softmax oprtation (full_band_prob)
-    print(" (prob, topk, norm): ",full_band_prob.size(),disparity_candidates_topk.size(),renormalized_prob_topk.size())
+    # print(" (prob, topk, norm): ",full_band_prob.size(),disparity_candidates_topk.size(),renormalized_prob_topk.size())
 
     return full_band_prob, disparity_candidates_topk, renormalized_prob_topk
 
