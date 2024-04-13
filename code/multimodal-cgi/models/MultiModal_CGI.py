@@ -247,42 +247,46 @@ class Multimodal_CGI(nn.Module):
         # max_indices [20,64,128]
         # left_bound [20,64,128]
         # right_bound [20,64,128]
-        # left_bound[max_indices] [20,64,128,64,128]
 
+        #calculting the max positions (disparity)
+        # initializing left and right bound to be of [10,64,128]
         max_probs, max_indices = torch.max(prob, dim=1)
         left_bound = torch.zeros_like(max_indices)
         right_bound = torch.zeros_like(max_indices)
 
 
+
+        # ========================================= Calculate Right Bound ========================================
+
         batch_prob = prob[:,:,:,:]
 
-        # print("prob: ",batch_prob)
-
-        # Caluclating right bounds
-        # print("current channel: ", batch_prob[:,:-1,:,:])
-        # print("next channel: ", batch_prob[:,1:,:,:])
-        print("max indices: ",max_indices)
-
+        # Initialize right_bounds to hold all possible right bounds
         right_bounds = torch.ones_like(prob)
+        # Compare current disparity level with the next to check bound
         right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
         # print("Right Bounds: ",right_bounds)
 
-        # Find the positions of FAlSE 
+        # Find the positions of TRUE 
+        # Inverse the ordering so that the min distance disparity level gets picked
         true_locations = torch.nonzero(right_bounds == True)
         true_locations = torch.flip(true_locations,dims=[0])
 
-        # Setting right bound to max disp 
-        right_bound = right_bound + (self.max_disp-1)
+        # Setting right bound to max disp (if nothing gets selected should end in the last disparity level)
+        right_bound = right_bound + (self.maxdisp-1)
 
+        # tensors for all selected locations to hold dimensions seperately
         t0 = true_locations[:,0]
         t1 = true_locations[:,1]
         t2 = true_locations[:,2]
         t3 = true_locations[:,3]
 
+        # Read only the defined values
         update_values = right_bound[t0,t2,t3]
 
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
+        # Get the difference from the max indice and check if it is on the right side of it
+        # if not remove the values 
         differences = t1-max_indices[t0,t2,t3]
         mask = differences >= 0
         update_values = update_values[mask]
@@ -293,26 +297,26 @@ class Multimodal_CGI(nn.Module):
 
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
-        # Need to figure out a way to do this in one go 
-        # Rather than repeatedly updating need to select the min so far
-        # update_values = torch.minimum(t1,update_values) * ((t1 - max_indices[t0,t2,t3])>=0) 
-        # Adding and removing one to differnetiate between mask and actual 0
+        # Get the minimum distanced disparity level on the right side
         update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
         # print("updated value: ",update_values)
 
+        # If  masked get the right edge (max disp)
         update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
         # print("updated value: ",update_values)
 
+        # update the right bound
         right_bound[t0,t2,t3] = update_values
-
         # print("right bound: ",right_bound)
 
-        # Calculating Left bounds
+        # =============================================================== Calculating Left Bound ============================================================
+        
+        # Initialize and comapre with previous disparity if left bound
         left_bounds = torch.ones_like(prob)
         left_bounds[:,1:,:,:] = batch_prob[:,1:,:,:]<batch_prob[:,:-1,:,:]
         # print("Left Bounds: ",left_bounds)
 
-        # Find the positions of FAlSE 
+        # Find the positions of TRUE 
         true_locations = torch.nonzero(left_bounds == True)
         # print("True Locations (Right): ",len(true_locations))
 
@@ -325,6 +329,7 @@ class Multimodal_CGI(nn.Module):
         update_values = left_bound[t0,t2,t3]
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
+        # Remove the locations that are on the right side of max disparity
         differences = max_indices[t0,t2,t3] - t1
         mask = differences >= 0
         update_values = update_values[mask]
@@ -338,6 +343,7 @@ class Multimodal_CGI(nn.Module):
         #* (( max_indices[t0,t2,t3] - t1)>=0) 
         update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
 
+        # Update left bound 
         left_bound[t0,t2,t3] = update_values
 
         # print("left bound: ",left_bound)
@@ -411,7 +417,7 @@ class Multimodal_CGI(nn.Module):
         shift_left[:,:-1,:,:] = prob_dist[:,:-1,:,:]
         cumulative_prob = shift_left + shift_right + prob_dist
         
-        print("cum prob:", cumulative_prob.size())
+        # print("cum prob:", cumulative_prob.size())
 
         # Working on calculating the bounds        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
