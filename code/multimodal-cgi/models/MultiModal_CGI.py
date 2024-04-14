@@ -261,7 +261,7 @@ class Multimodal_CGI(nn.Module):
         # Caluclating right bounds
         # print("current channel: ", batch_prob[:,:-1,:,:])
         # print("next channel: ", batch_prob[:,1:,:,:])
-        print("max indices: ",max_indices)
+        # print("max indices: ",max_indices)
 
         right_bounds = torch.ones_like(prob)
         right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
@@ -272,7 +272,7 @@ class Multimodal_CGI(nn.Module):
         true_locations = torch.flip(true_locations,dims=[0])
 
         # Setting right bound to max disp 
-        right_bound = right_bound + (self.max_disp-1)
+        right_bound = right_bound + (self.maxdisp+1)
 
         t0 = true_locations[:,0]
         t1 = true_locations[:,1]
@@ -411,7 +411,7 @@ class Multimodal_CGI(nn.Module):
         shift_left[:,:-1,:,:] = prob_dist[:,:-1,:,:]
         cumulative_prob = shift_left + shift_right + prob_dist
         
-        print("cum prob:", cumulative_prob.size())
+        # print("cum prob:", cumulative_prob.size())
 
         # Working on calculating the bounds        
         max_probs, max_indices, left_bound, right_bound = self.find_bounds(cumulative_prob)
