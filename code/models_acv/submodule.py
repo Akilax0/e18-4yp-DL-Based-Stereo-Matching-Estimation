@@ -541,3 +541,16 @@ def groupwise_correlation_4D(fea1, fea2, num_groups):
 
         
 
+# For uncertainty map calculation
+def disparity_variance(x, maxdisp, disparity):
+    # the shape of disparity should be B,1,H,W, return is the variance of the cost volume [B,1,H,W]
+    assert len(x.shape) == 4
+    disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
+    disp_values = disp_values.view(1, maxdisp, 1, 1)
+
+    # Unsqueeze to match the disparity size
+    disparity = disparity.unsqueeze(1) 
+    # print("disp values: ",disp_values.size())
+    # print("disparity values: ",disparity.size())
+    disp_values = (disp_values - disparity) ** 2
+    return torch.sum(x * disp_values, 1, keepdim=True)

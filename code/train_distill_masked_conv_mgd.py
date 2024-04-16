@@ -208,27 +208,34 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_feat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
+    disp_ests,s_lfeat,s_rfeat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
     # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
+
+    # sl_feat, sr_feat [1/4,1/8,1/16,1/32]
 
     with torch.no_grad():
         # evaluate mode on teacher
         t_model.eval()
         # teacher disp ests
-        t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
-    
+        t_disp_ests,t_lfeat,t_rfeat,t_cvolume,t_conv4,t_conv8,t_umap = t_model(imgL,imgR)
+        
+    # Left and right 1/4 th feature map
+
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
+
+    # t_umap full sized
 
     # channel numbers
     # student_channels = s_feat.size()[1]
     # teacher_channels = t_feat.size()[1]
 
+    # Distilling left and right features at 1/4th 
+    s_feat_left = align(s_lfeat[0],s_lfeat[0].size()[1],t_lfeat.size()[1])
+    s_feat_right = align(s_rfeat[0],s_rfeat[0].size()[1],t_rfeat.size()[1])
 
-
-    s_feat = align(s_feat,s_feat.size()[1],t_feat.size()[1])
-    # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
-    # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
+    #s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    #s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    #s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
@@ -268,23 +275,31 @@ def train_sample(sample, compute_metrics=False):
     
     # print("Original feature loss:  ",feat_loss)
     # mgd loss    
-    feat_loss = get_dis_loss(preds_S=s_feat, preds_T=t_feat, student_channels=s_feat.size()[1] , teacher_channels=t_feat.size()[1], lambda_mgd=lambda_mgd)
+    feat_loss_left = get_dis_loss(preds_S=s_feat_left, preds_T=t_lfeat, student_channels=s_feat_left.size()[1] , teacher_channels=t_lfeat.size()[1], lambda_mgd=lambda_mgd,mask = t_umap)
+    feat_loss_right = get_dis_loss(preds_S=s_feat_right, preds_T=t_rfeat, student_channels=s_feat_right.size()[1] , teacher_channels=t_rfeat.size()[1], lambda_mgd=lambda_mgd,mask = t_umap)
+    
+    feat_loss = feat_loss_left + feat_loss_right
+
     # print("Masked feature loss:  ",feat_loss)
     
+    #reduce mask to fit student size
+    ## print("mask size: ",mask.size())
+    #mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
+    #mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
+
+        # print("mask size: ",mask.size())
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
-    # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
+    #cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd,mask = mask) 
+
+    # Cost aggregation steps
+    #conv4_loss = get_dis_loss_3D(preds_S=s_conv4,preds_T=t_conv4,student_channels=s_conv4.size()[1],teacher_channels=t_conv4.size()[1],lambda_mgd=lambda_mgd,mask = mask) 
+
+    #mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/8
+    #conv8_loss = get_dis_loss_3D(preds_S=s_conv8,preds_T=t_conv8,student_channels=s_conv8.size()[1],teacher_channels=t_conv8.size()[1],lambda_mgd=lambda_mgd,mask = mask) 
+    
+
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
-
-
-    '''
-
-    Read from the model outputs and calculate loss. 
-    But before doing so generate using MGD . This is what happens on 
-    get_dis_loss anf get_dis_loss_3D 
-     
-
-    '''
 
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
@@ -368,7 +383,7 @@ def align(student,student_channels,teacher_channels):
 
     return m(student)
 
-def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
+def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15,mask=None):
 
 
     N, C, H, W = preds_T.shape
@@ -390,6 +405,21 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
 
+    thresh = 0.5
+
+    if mask is not None:
+        #reduce mask to fit student size
+        # print("mask size: ",mask.size())
+        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
+        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
+        # print("mask size: ",mask.size())
+
+        ma = mask.max()
+        mi = mask.min()
+        thr = mi + (ma-mi) * thresh
+        mat  = torch.where(mask > thr, 0, 1).to(device)
+        
+    # print("pred and mat size: ",preds_S.size(),mat.size())
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
     # print("masked_feat: " ,masked_feat.size())
@@ -406,7 +436,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
 
     return dis_loss
 
-def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
+def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15,mask=None):
 
 
     N, C, D, H, W = preds_T.shape
@@ -428,6 +458,15 @@ def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
 
+    thresh = 0.5
+
+    if mask is not None:
+
+        ma = mask.max()
+        mi = mask.min()
+        thr = mi + (ma-mi) * thresh
+        mat  = torch.where(mask > thr, 0, 1).to(device)
+        
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
     # print("masked_feat: " ,masked_feat.size())
