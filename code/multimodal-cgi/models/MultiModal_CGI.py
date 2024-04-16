@@ -346,7 +346,7 @@ class Multimodal_CGI(nn.Module):
         # Update left bound 
         left_bound[t0,t2,t3] = update_values
 
-        # print("left bound: ",left_bound)
+        print("left bound: ",left_bound)
 
 
 #==========================================================================================================================
