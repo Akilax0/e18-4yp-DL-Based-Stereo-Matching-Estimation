@@ -268,7 +268,7 @@ class CGI_Stereo(nn.Module):
             # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
             # Commenting out before focusing on features for cfnet
             # features_left[0],volume,cost,conv8
-            return [pred_up*4, pred.squeeze(1)*4],ll,rl
+            return [pred_up*4, pred.squeeze(1)*4],ll,rl,volume,cost,conv8
 
         else:
             return [pred_up*4]

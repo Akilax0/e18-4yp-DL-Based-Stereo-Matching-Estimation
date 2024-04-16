@@ -535,6 +535,7 @@ class cfnet(nn.Module):
         else:
             volume4 = gwc_volume4
 
+        print("volume4, volume5, volume6:  ",volume4.size(), volume5.size(),volume6.size() )
         # the 4 3D conv layers on each cost volume
         cost0_4 = self.dres0(volume4)
         cost0_4 = self.dres1(cost0_4) + cost0_4
@@ -571,6 +572,7 @@ class cfnet(nn.Module):
         confidence_v_gwc_s3, disparity_samples_s3 = self.cost_volume_generator(features_left["gw3"], features_right["gw3"],
                                                                          disparity_samples_s3, 'gwc', self.num_groups)
         confidence_v_s3 = torch.cat((confidence_v_gwc_s3, confidence_v_concat_s3, disparity_samples_s3), dim=1)
+        print("confidence_v_concat_s3, convidence_v_gwc_s3, disparity_samples_s3, confidence_v_s3 ",confidence_v_concat_s3.size(), confidence_v_gwc_s3.size(),disparity_samples_s3.size(), confidence_v_s3.size())
 
         disparity_samples_s3 = torch.squeeze(disparity_samples_s3, dim=1)
 
@@ -603,6 +605,7 @@ class cfnet(nn.Module):
         confidence_v_gwc_s2, disparity_samples_s2 = self.cost_volume_generator(features_left["gw2"], features_right["gw2"],
                                                                          disparity_samples_s2, 'gwc', self.num_groups // 2)
         confidence_v_s2 = torch.cat((confidence_v_gwc_s2, confidence_v_concat_s2, disparity_samples_s2), dim=1)
+        print("confidence_v_concat_s2, convidence_v_gwc_s2, disparity_samples_s2, confidence_v_s2 ",confidence_v_concat_s2.size(), confidence_v_gwc_s2.size(),disparity_samples_s2.size(), confidence_v_s2.size())
 
         disparity_samples_s2 = torch.squeeze(disparity_samples_s2, dim=1)
 
