@@ -39,7 +39,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -203,14 +203,14 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl = model(imgL, imgR)
+    disp_ests,s_ll,s_rl, s_cvolume, s_conv4, s_conv8 = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
         t_model.eval()
         # teacher disp ests
         # t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
-        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
+        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,t_cvolume, t_umaps = t_model(imgL,imgR)
 
     # introducing CFNet
     # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
@@ -226,9 +226,14 @@ def train_sample(sample, compute_metrics=False):
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/32
-    
-    # for i in range(len(t_down_umaps)):
-    #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
+
+    for i in range(len(t_down_umaps)):
+        print(" downsampled map index, size ",i,t_down_umaps[i].size())
+
+    # Downsample cost volume 1/2 -> 1/4
+    print("t_cvolume size: ",t_cvolume.size())
+    t_cvolume = F.interpolate(t_cvolume, scale_factor=0.5, mode='bilinear', align_corners=False)
+    print("t_cvolume size: ",t_cvolume.size())
 
     '''
     Features from student as s_ll,s_rl
@@ -251,7 +256,10 @@ def train_sample(sample, compute_metrics=False):
     s_rl[1] = align(s_rl[1],s_rl[1].size()[1],t_rl[2].size()[1])
     s_rl[2] = align(s_rl[2],s_rl[2].size()[1],t_rl[3].size()[1])
     s_rl[3] = align(s_rl[3],s_rl[3].size()[1],t_rl[4].size()[1])
-    
+
+    #Volume aligened
+    s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1]) 
+
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
     # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
     # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
@@ -295,7 +303,8 @@ def train_sample(sample, compute_metrics=False):
     feat_loss = feat_loss + 0.000001*get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume)
-    # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
+
+    cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd, mask=t_down_umaps[1]) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 

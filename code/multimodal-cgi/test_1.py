@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-prob = torch.randn((2,5,2,2))
-max_disp = 5
-# print("prob: ",prob)
+max_disp = 20
+prob = torch.rand((1,max_disp,64,128))
+# prob = torch.abs(prob)
 
 b,d,h,w = prob.size()
 
@@ -17,12 +17,12 @@ right_bound = torch.zeros_like(max_indices)
 
 batch_prob = prob[:,:,:,:]
 
-print("prob: ",batch_prob)
+# print("prob: ",batch_prob)
 
 # Caluclating right bounds
 # print("current channel: ", batch_prob[:,:-1,:,:])
 # print("next channel: ", batch_prob[:,1:,:,:])
-print("max indices: ",max_indices)
+# print("max indices: ",max_indices)
 
 right_bounds = torch.ones_like(prob)
 right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
@@ -30,15 +30,15 @@ right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
 
 # Find the positions of FAlSE 
 true_locations = torch.nonzero(right_bounds == True)
-true_locations = torch.flip(true_locations,dims=[0])
+true_locations_r = torch.flip(true_locations,dims=[0])
 
 # Setting right bound to max disp 
 right_bound = right_bound + (max_disp-1)
 
-t0 = true_locations[:,0]
-t1 = true_locations[:,1]
-t2 = true_locations[:,2]
-t3 = true_locations[:,3]
+t0 = true_locations_r[:,0]
+t1 = true_locations_r[:,1]
+t2 = true_locations_r[:,2]
+t3 = true_locations_r[:,3]
 
 update_values = right_bound[t0,t2,t3]
 
@@ -66,7 +66,6 @@ update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2
 
 right_bound[t0,t2,t3] = update_values
 
-print("right bound: ",right_bound)
 
 # Calculating Left bounds
 left_bounds = torch.ones_like(prob)
@@ -101,7 +100,16 @@ update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2,
 
 left_bound[t0,t2,t3] = update_values
 
-print("left bound: ",left_bound)
+print("prob: ",prob[0,:,3,2])
+for i in range(len(true_locations_r)):
+    print("true location index , location : ",i,true_locations_r[i])
+print("right bounds: ",right_bounds[0,:,3,2])
+print("true locations: ",true_locations_r)
+print("left bounds: ",left_bounds[0,:,3,2])
+print("right bound: ",right_bound[0,3,2])
+print("left bound: ",left_bound[0,3,2])
+print("max indices : ",max_indices[0,3,2])
+print("max probs: ",max_probs[0,3,2])
 
 # print("True Locations (Right): ",true_locations)
 # =======================================================================================

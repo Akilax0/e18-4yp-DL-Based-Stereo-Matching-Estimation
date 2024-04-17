@@ -534,8 +534,10 @@ class cfnet(nn.Module):
 
         else:
             volume4 = gwc_volume4
-
+        print("Max disparity: ",self.maxdisp)
+        print("gwc_volume4, gwc_volume5, gwc_volume6:  ",gwc_volume4.size(), gwc_volume5.size(),gwc_volume6.size() )
         print("volume4, volume5, volume6:  ",volume4.size(), volume5.size(),volume6.size() )
+
         # the 4 3D conv layers on each cost volume
         cost0_4 = self.dres0(volume4)
         cost0_4 = self.dres1(cost0_4) + cost0_4
@@ -608,6 +610,7 @@ class cfnet(nn.Module):
         print("confidence_v_concat_s2, convidence_v_gwc_s2, disparity_samples_s2, confidence_v_s2 ",confidence_v_concat_s2.size(), confidence_v_gwc_s2.size(),disparity_samples_s2.size(), confidence_v_s2.size())
 
         disparity_samples_s2 = torch.squeeze(disparity_samples_s2, dim=1)
+        print("Disparity samples: ",disparity_samples_s2.size())
 
         cost0_s2 = self.confidence0_s2(confidence_v_s2)
         cost0_s2 = self.confidence1_s2(cost0_s2) + cost0_s2
@@ -691,7 +694,7 @@ class cfnet(nn.Module):
             pred1_s2 = torch.squeeze(pred1_s2, 1)
 
             # ll / rl [1/2,1/4,1/8,1/16,1/32]  umaps [1/8,1/4,1/2]
-            return [pred1_s2], [pred1_s3_up], [pred2_s4] , ll, rl, umaps 
+            return [pred1_s2], [pred1_s3_up], [pred2_s4] , ll, rl,confidence_v_s2, umaps 
 
 
 def CFNet(d):

@@ -14,7 +14,9 @@ from torch import Tensor
 
 def check_shape_for_metric_computation(*vars):
     assert isinstance(vars, tuple)
+    # print("no of vars: ",len(vars))
     for var in vars:
+        # print("var size: ",var.size())
         assert len(var.size()) == 3
         assert var.size() == vars[0].size()
 

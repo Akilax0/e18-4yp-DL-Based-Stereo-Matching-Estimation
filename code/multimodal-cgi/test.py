@@ -2,8 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+#transfer gt disparity map to probability distribution map
 m = 1
-n = 9
+n = 9 # m x n neighborhood to determine whether the centering pixel is edge or not
+th1 = 1 # threshold to determine whether it is edge or not
+th2 = 1 # threshold to determine p1-p2 clustering
+alpha = 0.8
+    
 
 
 # Define a custom convolutional kernel for computing absolute differences
@@ -58,10 +63,10 @@ print("Differences: ",differences.size())
 
 thresh = 3 
 
-p1_cluster = torch.where(differences< thresh,1, 0 )
-print("p1_cluster :",p1_cluster.size() )
+p1_p2_cluster = torch.where(differences< thresh,1, 0 )
+print("p1_cluster :",p1_p2_cluster.size() )
 
-p1_sum = torch.sum(p1_cluster, dim=3).squeeze(-1)
+p1_sum = torch.sum(p1_p2_cluster, dim=3).squeeze(-1)
 print("p1_sum: ",p1_sum.size())
 
 p1_points = torch.zeros_like(input_tensor)
@@ -73,17 +78,41 @@ p2_points = m*n - p1_points
 print("p2_points :" , p2_points)
 
 
+# adding small value to p2 to remove divide by 0 error
+p2_points = p2_points + 0.0001
+print("p2_count",p2_points.eq(0).any())
+
+# # p2_ount contains 0 resulting in NaNs 
+# # what can we do here?
+# mu2 = torch.sum(p1_p2_cluster * neighborhood, dim=1, keepdim=True) / p2_count # pay attention divided by 0
+
+print("p1_p2_cluster size :",p1_p2_cluster.size())    
+print("unfolded tensor size :",unfolded_tensor.size())    
+print("p2_points size",p2_points.size())
+print("multiplication ", (p1_p2_cluster*unfolded_tensor).size())
+
+
+# Need to check calculating mu2  
+# mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
+mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True)  / p2_points
+
+print("mu2 size: ",mu2.size())
+
+# As in paper
+w = alpha + (p1_points - 1) * (1-alpha) * (m*n-1)
+print("w size : ",w.size())
+
 # print("p1_count:" ,torch.sum(p1_cluster))
 
 # Print the results
-for i in range(differences.size(0)):
-    for j in range(differences.size(1)):
-        central_pixel = central_pixels[i, j].item()
-        neighborhood_differences = differences[i, j]
-        # print("neighbourhood: ",unfolded_tensor[:,:,0,neighborhood_size[1]//2])
-        print(f"Neighborhood at position ({i}, {j}) - Central pixel: {central_pixel:.2f}")
-        print("Differences:")
-        print(neighborhood_differences)
+# for i in range(differences.size(0)):
+#     for j in range(differences.size(1)):
+#         central_pixel = central_pixels[i, j].item()
+#         neighborhood_differences = differences[i, j]
+#         # print("neighbourhood: ",unfolded_tensor[:,:,0,neighborhood_size[1]//2])
+#         print(f"Neighborhood at position ({i}, {j}) - Central pixel: {central_pixel:.2f}")
+#         print("Differences:")
+#         print(neighborhood_differences)
 
 
 
