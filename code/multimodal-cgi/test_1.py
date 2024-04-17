@@ -100,9 +100,9 @@ update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2,
 
 left_bound[t0,t2,t3] = update_values
 
-print("prob: ",prob[0,:,3,2])
 for i in range(len(true_locations_r)):
     print("true location index , location : ",i,true_locations_r[i])
+print("prob: ",prob[0,:,3,2])
 print("right bounds: ",right_bounds[0,:,3,2])
 print("true locations: ",true_locations_r)
 print("left bounds: ",left_bounds[0,:,3,2])
