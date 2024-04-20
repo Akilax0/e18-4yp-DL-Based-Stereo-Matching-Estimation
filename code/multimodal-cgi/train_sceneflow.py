@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 import gc
 
 cudnn.benchmark = True
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Multi-modal extension of CGI-Stereo')
 parser.add_argument('--model', default='Multimodal_CGI', help='select a model structure', choices=__models__.keys())
