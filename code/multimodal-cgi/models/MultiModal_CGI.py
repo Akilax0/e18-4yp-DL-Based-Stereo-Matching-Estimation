@@ -254,6 +254,10 @@ class Multimodal_CGI(nn.Module):
         left_bound = torch.zeros_like(max_indices)
         right_bound = torch.zeros_like(max_indices)
 
+        # For debugging
+        h1 = 2
+        w1 = 3
+        b = 0
 
 
         # ========================================= Calculate Right Bound ========================================
@@ -264,49 +268,127 @@ class Multimodal_CGI(nn.Module):
         right_bounds = torch.ones_like(prob)
         # Compare current disparity level with the next to check bound
         right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
-        # print("Right Bounds: ",right_bounds)
+        # print("Right Bounds: ",right_bounds.size())
 
         # Find the positions of TRUE 
         # Inverse the ordering so that the min distance disparity level gets picked
-        true_locations = torch.nonzero(right_bounds == True)
-        true_locations = torch.flip(true_locations,dims=[0])
+        true_locations_r = torch.nonzero(right_bounds == True,as_tuple=False)
+        # print("torch locatuons: ",true_locations_r.size())
+
+        # true_locations_r = torch.flip(true_locations,dims=[0])
 
         # Setting right bound to max disp (if nothing gets selected should end in the last disparity level)
         right_bound = right_bound + (self.maxdisp-1)
 
         # tensors for all selected locations to hold dimensions seperately
-        t0 = true_locations[:,0]
-        t1 = true_locations[:,1]
-        t2 = true_locations[:,2]
-        t3 = true_locations[:,3]
+        t0 = true_locations_r[:,0]
+        t1 = true_locations_r[:,1]
+        t2 = true_locations_r[:,2]
+        t3 = true_locations_r[:,3]
 
         # Read only the defined values
-        update_values = right_bound[t0,t2,t3]
+        # update_values = right_bound[t0,t2,t3]
+        # print("updated values size: ",update_values.size())
 
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
         # Get the difference from the max indice and check if it is on the right side of it
         # if not remove the values 
         differences = t1-max_indices[t0,t2,t3]
+        # for i in range(len(t0)):
+        #     if t2[i]==h1 and t3[i]==w1:
+        #         print("Difference, t1, max disp: ",differences[i],t1[i],max_indices[t0[i],t2[i],t3[i]])
         mask = differences >= 0
-        update_values = update_values[mask]
+        # Contains true_loication_r positions which on the right side of the max indice
+        update_values = true_locations_r[mask]
+        # print("update_value: ",update_values.size())
+
+        # update_values = update_values[mask]
         t0 = t0[mask]
         t1 = t1[mask]
         t2 = t2[mask]
         t3 = t3[mask]
 
+        # Testing too get the minimum 
+        pos_2_3 = update_values[:,[0,2,3]]
+        # print("pos_2_3 size: ",pos_2_3.size())
+        
+        # Find unique positions 
+        uniq_pos, indices = torch.unique(pos_2_3, dim=0, return_inverse=True)
+        # print("uniq pos, indices: ",uniq_pos.size(),indices.size(), indices.get_device())
+
+        # mask_2_3 = torch.eq(pos_2_3)
+        # min values tensor
+        # min_values = torch.zeros(uniq_pos.size(0))
+
+        # print("=============================update value right============================")
+        # for i in range(len(update_values)):
+        #     if update_values[i][2]==h1 and update_values[i][3]==w1:
+        #         print("true location index , location : ",i,update_values[i])
+
+        for i, pos in enumerate(uniq_pos):
+            # MAsk to select sam 2nd and 3rd positions
+            mask = indices == i 
+            # mask size 404295 <= all avaliable positions (same size as indices) 
+
+            # Apply mask to extract tensors with same  0th ,2nd and 3rd positions
+            filtered_val = update_values[mask]
+            min_value = torch.min(filtered_val[:,1])
+
+            # min_values[i] = min_value
+            update_values[mask] = min_value
+            
+        # # Have to get masks for all uniq posisitons 
+        # #masks size : [uniq_pos , indices]
+        # masks = indices.unsqueeze(0).cuda() == torch.arange(uniq_pos.size(0)).unsqueeze(1).cuda()
+        # print("masks size: ",masks.size())
+        # # Now have to apply this mask to all the update values size : [indices, 4]
+        # # Create a tensor sized [uniq_pos,indices, 4] to apply the mask
+        # exp_update = torch.ones(uniq_pos.size()[0]).unsqueeze(1).unsqueeze(1).cuda()
+        # # exp_update = update_values.unsqueeze(0).tile(indices.size()[0],1,1)
+        
+        # # exp_update = exp_update * update_values
+        # print("exp_update size : ",exp_update.size())
+        # exp_update = exp_update.expand(-1, update_values.size()[0],update_values.size()[1])
+        # print("exp_update size : ",exp_update.size())
+        # exp_update = exp_update * update_values
+        # print("exp_update size : ",exp_update.size())
+
+        # # print("mask non zero: ",torch.nonzero(mask))
+        # # print("Sizes mask, filtered_val, min_value : ", mask.size(),filtered_val.size(),min_value.size() )
+
+        # print("updated value: ",update_values.size())
+        # print("indices and uniq pos: ",indices.unsqueeze(0).size(), torch.arange(uniq_pos.size(0)).unsqueeze(1).size())
+        # # print("Mask size: ",masks.any(dim=0).size())
+
+        # filtered_val = update_values[masks]
+        # print("filtered val size: ",filtered_val.size())
+        # update_values[masks,1] = torch.min(filtered_val[:,1],dim=0)[0]
+
+
+        # min_values = torch.zeros(uniq_pos.size(0))
+        # min_value_indices = torch.min(update_values[:,1].unsqueeze(1)*(indices.unsqueeze(0) == torch.arange(uniq_pos.size(0)).unsqueeze(1)),dim=1)[1]
+        # update_values[:,1] = min_values[min_value_indices]
+
+
+
+        # print("min values: ",min_values.size())
+        # for i in range(len(uniq_pos)):
+        #     if uniq_pos[i][0] == h1 and uniq_pos[i][1]==w1:
+        #         print("min value at h1,w1 : ",h1,w1,min_values[i])
+
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
-        # Get the minimum distanced disparity level on the right side
-        update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
-        # print("updated value: ",update_values)
+        # # Get the minimum distanced disparity level on the right side
+        # update_values = torch.minimum(t1,update_values[:,1]) #+ 1) * ((t1-max_indices[t0,t2,t3]>=0))
+        # # print("updated value: ",update_values)
 
-        # If  masked get the right edge (max disp)
-        update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
-        # print("updated value: ",update_values)
+        # # If  masked get the right edge (max disp)
+        # update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
+        # # print("updated value: ",update_values)
 
         # update the right bound
-        right_bound[t0,t2,t3] = update_values
+        right_bound[t0,t2,t3] = update_values[:,1]
         # print("right bound: ",right_bound)
 
         # =============================================================== Calculating Left Bound ============================================================
@@ -317,37 +399,73 @@ class Multimodal_CGI(nn.Module):
         # print("Left Bounds: ",left_bounds)
 
         # Find the positions of TRUE 
-        true_locations = torch.nonzero(left_bounds == True)
+        true_locations_l = torch.nonzero(left_bounds == True)
         # print("True Locations (Right): ",len(true_locations))
 
         # # print("Left bound: ",left_bound)
-        t0 = true_locations[:,0]
-        t1 = true_locations[:,1]
-        t2 = true_locations[:,2]
-        t3 = true_locations[:,3]
+        t0 = true_locations_l[:,0]
+        t1 = true_locations_l[:,1]
+        t2 = true_locations_l[:,2]
+        t3 = true_locations_l[:,3]
 
-        update_values = left_bound[t0,t2,t3]
+        # update_values = left_bound[t0,t2,t3]
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
         # Remove the locations that are on the right side of max disparity
         differences = max_indices[t0,t2,t3] - t1
         mask = differences >= 0
-        update_values = update_values[mask]
+        update_values = true_locations_l[mask]
         t0 = t0[mask]
         t1 = t1[mask]
         t2 = t2[mask]
         t3 = t3[mask]
         # print("updated_values: ",update_values,t0,t1,t2,t3)
 
-        update_values = torch.maximum(t1,update_values)
-        #* (( max_indices[t0,t2,t3] - t1)>=0) 
-        update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
+        # Testing too get the minimum 
+        pos_2_3 = update_values[:,[0,2,3]]
+        # print("pos_2_3 size: ",pos_2_3.size())
+        
+        # Find unique positions 
+        uniq_pos, indices = torch.unique(pos_2_3, dim=0, return_inverse=True)
+        # print("uniq pos, indices: ",uniq_pos.size(),indices.size())
+
+        for i, pos in enumerate(uniq_pos):
+            # MAsk to select sam 2nd and 3rd positions
+            mask = indices == i
+
+            # Apply mask to extract tensors with 2nd and 3rd positions
+            filtered_val = update_values[mask]
+            max_value = torch.max(filtered_val[:,1])
+
+            # min_values[i] = min_value
+            update_values[mask] = max_value
+
+
+        # update_values = torch.maximum(t1,update_values)
+        # #* (( max_indices[t0,t2,t3] - t1)>=0) 
+        # update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2, t3])
 
         # Update left bound 
-        left_bound[t0,t2,t3] = update_values
+        left_bound[t0,t2,t3] = update_values[:,1]
 
-        print("left bound: ",left_bound)
+        # print("left bound: ",left_bound)
 
+
+        # print("=============================right============================")
+        # for i in range(len(true_locations_r)):
+        #     if true_locations_r[i][2]==h1 and true_locations_r[i][3]==w1:
+        #         print("true location index , location : ",i,true_locations_r[i])
+        # print("=============================left============================")
+        # for i in range(len(true_locations_l)):
+        #     if true_locations_l[i][2]==h1 and true_locations_l[i][3]==w1:
+        #         print("true location index , location : ",i,true_locations_l[i])
+        # print("prob: ",prob[b,:,h1,w1])
+        # print("right bounds: ",right_bounds[b,:,h1,w1])
+        # print("left bounds: ",left_bounds[b,:,h1,w1])
+        # print("right bound: ",right_bound[b,h1,w1])
+        # print("left bound: ",left_bound[b,h1,w1])
+        # print("max indices : ",max_indices[b,h1,w1])
+        # print("max probs: ",max_probs[b,h1,w1])
 
 #==========================================================================================================================
 

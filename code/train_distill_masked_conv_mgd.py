@@ -233,16 +233,14 @@ def train_sample(sample, compute_metrics=False):
     s_feat_left = align(s_lfeat[0],s_lfeat[0].size()[1],t_lfeat.size()[1])
     s_feat_right = align(s_rfeat[0],s_rfeat[0].size()[1],t_rfeat.size()[1])
 
-    s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
     # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
     # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
-    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
-    # print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
-
+    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size()) print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
@@ -286,23 +284,23 @@ def train_sample(sample, compute_metrics=False):
 
 
 
-    #reduce mask to fit student size
-    # print("t_umap size: ",t_umap.size())
-    # t_umap = t_umap.unsqueeze(1)
-    # print("t_umap: ",t_umap.size())
-    # reshaped_tensor = t_umap.view(t_umap.size(0), t_umap.size(1),t_umap.size(2), -1)
-    # print("reshaped tensor ",reshaped_tensor.size())
+    # #reduce mask to fit student size
+    # # print("t_umap size: ",t_umap.size())
+    # # t_umap = t_umap.unsqueeze(1)
+    # # print("t_umap: ",t_umap.size())
+    # # reshaped_tensor = t_umap.view(t_umap.size(0), t_umap.size(1),t_umap.size(2), -1)
+    # # print("reshaped tensor ",reshaped_tensor.size())
 
-    t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
-    t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
+    # t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
+    # t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
 
-        # print("mask size: ",mask.size())
-    # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
-    cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
-    # print("cvoluime loss: ",cvolume_loss)
+    #     # print("mask size: ",mask.size())
+    # # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
+    # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
+    # # print("cvoluime loss: ",cvolume_loss)
 
-    # Cost aggregation steps
-    conv4_loss = get_dis_loss_3D(preds_S=s_conv4,preds_T=t_conv4,student_channels=s_conv4.size()[1],teacher_channels=t_conv4.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
+    # # Cost aggregation steps
+    # conv4_loss = get_dis_loss_3D(preds_S=s_conv4,preds_T=t_conv4,student_channels=s_conv4.size()[1],teacher_channels=t_conv4.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
 
     # t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/8
     # conv8_loss = get_dis_loss_3D(preds_S=s_conv8,preds_T=t_conv8,student_channels=s_conv8.size()[1],teacher_channels=t_conv8.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 

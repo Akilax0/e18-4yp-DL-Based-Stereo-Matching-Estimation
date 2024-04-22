@@ -3,8 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 max_disp = 20
-prob = torch.rand((1,max_disp,64,128))
+prob = torch.rand((1,max_disp,30,30))
 # prob = torch.abs(prob)
+
+h1 = 2
+w1 = 3
+
 
 b,d,h,w = prob.size()
 
@@ -30,7 +34,9 @@ right_bounds[:,:-1,:,:] = batch_prob[:,:-1,:,:]<batch_prob[:,1:,:,:]
 
 # Find the positions of FAlSE 
 true_locations = torch.nonzero(right_bounds == True)
+print("true locations size: ",true_locations.size())
 true_locations_r = torch.flip(true_locations,dims=[0])
+
 
 # Setting right bound to max disp 
 right_bound = right_bound + (max_disp-1)
@@ -40,17 +46,24 @@ t1 = true_locations_r[:,1]
 t2 = true_locations_r[:,2]
 t3 = true_locations_r[:,3]
 
+# update_values = torch.tensor([t0,t2,t3,right_bound[t0,t2,t3]])
 update_values = right_bound[t0,t2,t3]
+
 
 # print("updated_values: ",update_values,t0,t1,t2,t3)
 
 differences = t1-max_indices[t0,t2,t3]
 mask = differences >= 0
+print("update values size: ",update_values.size())
 update_values = update_values[mask]
+print("update values size: ",update_values.size())
 t0 = t0[mask]
 t1 = t1[mask]
 t2 = t2[mask]
 t3 = t3[mask]
+
+# min_locations = torch.minimum(true_locations_r,dim=[0])
+# print("minimum locations: ",min_locations.size())
 
 # print("updated_values: ",update_values,t0,t1,t2,t3)
 
@@ -62,10 +75,13 @@ update_values = torch.minimum(t1,update_values) #+ 1) * ((t1-max_indices[t0,t2,t
 # print("updated value: ",update_values)
 
 update_values = torch.where(update_values > 0, update_values, right_bound[t0, t2, t3])
-# print("updated value: ",update_values)
+print("updated value: ",update_values.size())
 
-right_bound[t0,t2,t3] = update_values
+# right_bound[t0,t2,t3] = update_values[-1]
 
+for i in range(len(t0)):
+    if t2[i]==h1 and t3[i]==w1:
+        print("t0,t1,t2,t3 , right_bound: ",t0[i],t1[i],t2[i],t3[i],right_bound[t0[i],t2[i],t3[i]])
 
 # Calculating Left bounds
 left_bounds = torch.ones_like(prob)
@@ -100,16 +116,17 @@ update_values = torch.where(update_values > 0, update_values, left_bound[t0, t2,
 
 left_bound[t0,t2,t3] = update_values
 
+
 for i in range(len(true_locations_r)):
-    print("true location index , location : ",i,true_locations_r[i])
-print("prob: ",prob[0,:,3,2])
-print("right bounds: ",right_bounds[0,:,3,2])
-print("true locations: ",true_locations_r)
-print("left bounds: ",left_bounds[0,:,3,2])
-print("right bound: ",right_bound[0,3,2])
-print("left bound: ",left_bound[0,3,2])
-print("max indices : ",max_indices[0,3,2])
-print("max probs: ",max_probs[0,3,2])
+    if true_locations_r[i][2]==h1 and true_locations_r[i][3]==w1:
+        print("true location index , location : ",i,true_locations_r[i])
+print("prob: ",prob[0,:,h1,w1])
+print("right bounds: ",right_bounds[0,:,h1,w1])
+print("left bounds: ",left_bounds[0,:,h1,w1])
+print("right bound: ",right_bound[0,h1,w1])
+print("left bound: ",left_bound[0,h1,w1])
+print("max indices : ",max_indices[0,h1,w1])
+print("max probs: ",max_probs[0,h1,w1])
 
 # print("True Locations (Right): ",true_locations)
 # =======================================================================================
