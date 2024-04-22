@@ -17,6 +17,7 @@ import argparse
 from datasets import KITTI2015loader as kt2015
 from datasets import KITTI2012loader as kt2012
 from models import __models__
+# from models_acv import __t_models__
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -27,6 +28,9 @@ parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity'
 parser.add_argument('--datapath', default="/data/KITTI/KITTI_2015/training/", help='data path')
 parser.add_argument('--kitti', type=str, default='2015')
 parser.add_argument('--loadckpt', default='./pretrained_models/CGI_Stereo/sceneflow.ckpt',help='load the weights from a specific checkpoint')
+
+# parser.add_argument('--attention_weights_only', default=False, type=str,  help='only train attention weights')
+# parser.add_argument('--freeze_attention_weights', default=False, type=str,  help='freeze attention weights parameters')
 
 args = parser.parse_args()
 
@@ -44,6 +48,11 @@ model = __models__[args.model](args.maxdisp)
 model = nn.DataParallel(model)
 model.cuda()
 model.eval()
+
+# model = __models__[args.model](args.maxdisp)
+# model = nn.DataParallel(model)
+# model.cuda()
+# model.eval()
 
 state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
@@ -74,13 +83,18 @@ for i in trange(len(test_limg)):
     gt_tensor = torch.FloatTensor(disp_gt).unsqueeze(0).unsqueeze(0).cuda()
 
     with torch.no_grad():
-        pred_disp  = model(limg_tensor, rimg_tensor)[-1]
+        # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
+        pred_disp  = model(limg_tensor, rimg_tensor)
+        # print("pred disp: ",len(pred_disp))
+        pred_disp = pred_disp[-1]
+
         pred_disp = pred_disp[:, hi - h:, wi - w:]
 
     predict_np = pred_disp.squeeze().cpu().numpy()
 
     op_thresh = 3
     mask = (disp_gt > 0) & (disp_gt < args.maxdisp)
+    # print("Sizes: ",predict_np.size(), mask.size(), disp_gt.size())
     error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
 
     pred_error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))

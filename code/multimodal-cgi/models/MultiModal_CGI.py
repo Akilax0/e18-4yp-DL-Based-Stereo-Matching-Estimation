@@ -253,6 +253,9 @@ class Multimodal_CGI(nn.Module):
         max_probs, max_indices = torch.max(prob, dim=1)
         left_bound = torch.zeros_like(max_indices)
         right_bound = torch.zeros_like(max_indices)
+        
+        h1 = 2
+        w1 = 3
 
         # For debugging
         h1 = 2
@@ -272,10 +275,15 @@ class Multimodal_CGI(nn.Module):
 
         # Find the positions of TRUE 
         # Inverse the ordering so that the min distance disparity level gets picked
+<<<<<<< HEAD
         true_locations_r = torch.nonzero(right_bounds == True,as_tuple=False)
         # print("torch locatuons: ",true_locations_r.size())
 
         # true_locations_r = torch.flip(true_locations,dims=[0])
+=======
+        true_locations = torch.nonzero(right_bounds == True)
+        true_locations_r = torch.flip(true_locations,dims=[0])
+>>>>>>> 57bf64e9f2a634cd1ca1d2edfeec213576416e97
 
         # Setting right bound to max disp (if nothing gets selected should end in the last disparity level)
         right_bound = right_bound + (self.maxdisp-1)
@@ -450,6 +458,21 @@ class Multimodal_CGI(nn.Module):
 
         # print("left bound: ",left_bound)
 
+        print("==================right======================")
+        for i in range(len(true_locations_r)):
+            if true_locations_r[i][2]==h1 and true_locations_r[i][3]==w1:
+                print("true location index , location : ",i,true_locations_r[i])
+        print("==================left======================")
+        for i in range(len(true_locations_l)):
+            if true_locations_l[i][2]==h1 and true_locations_l[i][3]==w1:
+                print("true location index , location : ",i,true_locations_l[i])
+        print("prob: ",prob[0,:,h1,w1])
+        print("right bounds: ",right_bounds[0,:,h1,w1])
+        print("left bounds: ",left_bounds[0,:,h1,w1])
+        print("right bound: ",right_bound[0,h1,w1])
+        print("left bound: ",left_bound[0,h1,w1])
+        print("max indices : ",max_indices[0,h1,w1])
+        print("max probs: ",max_probs[0,h1,w1])
 
         # print("=============================right============================")
         # for i in range(len(true_locations_r)):
