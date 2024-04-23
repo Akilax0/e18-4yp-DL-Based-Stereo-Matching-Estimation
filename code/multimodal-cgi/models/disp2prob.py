@@ -158,9 +158,9 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     # print("gtDisp Nan? ",torch.isnan(gtDisp).any())
     b, c, h, w = gtDisp.shape
     
-    print("GT Disparity size: ", gtDisp.size())
+    # print("GT Disparity size: ", gtDisp.size())
 
-    print("m , n, h, w", m, n, h, w)
+    # print("m , n, h, w", m, n, h, w)
 
     # Figure out j and i here 
     # The indexing is whats causing problems now.
@@ -177,7 +177,8 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
 
     print("Padded tensorr: ",padded_tensor.size())
 
-    padded_tensor = padded_tensor.squeeze(0).squeeze(0)
+    # padded_tensor = padded_tensor.squeeze(0).squeeze(0)
+    padded_tensor = padded_tensor #.squeeze(0).squeeze(0)
     print("padded tensor squeezed: ",padded_tensor.size())
 
     # Unfold the padded tensor to extract neighborhoods
@@ -255,15 +256,25 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
     print("p2_points size",p2_points.size())
     print("multiplication ", (p1_p2_cluster*unfolded_tensor).size())
 
-
+    # Make it p2 summatioon
+    p1_p2_cluster = p1_p2_cluster^1
+    # IF looking for p2 need to invert the p1_p2_cluster
+    # p2 points what is mu2 ?
     # Need to check calculating mu2  
-    mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
+    mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=-1, keepdim=True).squeeze(-1).squeeze(-1) / p2_points
     
     print("mu2 size: ",mu2.size())
 
     # As in paper
     w = alpha + (p1_points - 1) * (1-alpha) * (m*n-1)
     print("w size : ",w.size())
+    
+
+    print(gtDisp[0,0,10-m1:10+m1+1,10-n1:10+n1+1])
+    print(mu2[0,0,10,10])
+    # This gives all as p1 
+    
+    print(p1_p2_cluster[0,0,10,10])
 
     return mu2, w
 
@@ -271,7 +282,7 @@ def fetch_neighborhood_info(gtDisp, m, n, thres, alpha):
 def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # Getting batch size and channel of gt
     b,h,w = gt.size()
-    print("Ground Truth size: ",gt.size())
+    # print("Ground Truth size: ",gt.size())
 
     # kernel = torch.ones(1, 1, m, n).to(gt.device)
     kernel = torch.ones(b,1, m, n).to(gt.device)
@@ -279,20 +290,20 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # increase dimension to include disparity
     gt = torch.unsqueeze(gt,dim=1)
 
-    print("kernel gt ",kernel.size(),gt.size())
+    # print("kernel gt ",kernel.size(),gt.size())
     
     # Convolve singular kernel by conv2d on padded ground truth
     mean_gt = F.conv2d(gt, kernel, padding=(m // 2, n // 2))
-    print("mean_gt device:" , mean_gt.get_device())
+    # print("mean_gt device:" , mean_gt.get_device())
 
     # Reduce channels to 1 by 1x1 kernel
-    conv1x1 = nn.Conv2d(in_channels=10,out_channels=1,kernel_size=1).cuda()
+    conv1x1 = nn.Conv2d(in_channels=mean_gt.size()[1],out_channels=1,kernel_size=1).cuda()
     mean_gt = conv1x1(mean_gt)
 
-    print("mean_gt device:" , mean_gt.get_device())
+    # print("mean_gt device:" , mean_gt.get_device())
 
-    print("gt: ",gt.size())
-    print("mean_gt: ",mean_gt.size())
+    # print("gt: ",gt.size())
+    # print("mean_gt: ",mean_gt.size())
     # Calculate mean
     mean_gt = mean_gt / (m * n)
 
@@ -310,21 +321,21 @@ def generate_md_gt_distribution(gt, m, n, th1, th2, maxDisp, alpha=0.8):
     # print("mu2 ",torch.isnan(mu2).any())
     dist2 = LaplaceDisp2Prob(maxDisp, mu2, variance=1)
     
-    print("w size: ",w.size()) 
-    print("non_edge_prob_dist size: ",non_edge_prob_dist.size()) 
+    # print("w size: ",w.size()) 
+    # print("non_edge_prob_dist size: ",non_edge_prob_dist.size()) 
     # print("edge_mask size: ",edge_mask.size()) 
     # print("edge_prob_dist size: ",edge_prob_dist.size()) 
 
     # Equation on paper
     edge_prob_dist = w*non_edge_prob_dist + (1-w)*dist2.getProb()
 
-    print("edge_mask size: ",edge_mask.size())    
-    print("non_edge_prob_dist size: ",non_edge_prob_dist.size())    
-    print("edge_prob_dist size: ",edge_prob_dist.size())    
+    # print("edge_mask size: ",edge_mask.size())    
+    # print("non_edge_prob_dist size: ",non_edge_prob_dist.size())    
+    # print("edge_prob_dist size: ",edge_prob_dist.size())    
 
     md_gt_dist = (~edge_mask) * non_edge_prob_dist + edge_mask * edge_prob_dist
     
-    print("md_gt_dist: ",md_gt_dist.size())
+    # print("md_gt_dist: ",md_gt_dist.size())
 
     return md_gt_dist
 

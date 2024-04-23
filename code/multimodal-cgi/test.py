@@ -9,7 +9,8 @@ th1 = 1 # threshold to determine whether it is edge or not
 th2 = 1 # threshold to determine p1-p2 clustering
 alpha = 0.8
     
-
+m1 = m//2
+n1 = n//2
 
 # Define a custom convolutional kernel for computing absolute differences
 # kernel = torch.tensor([[1, 1, 1, 1, -8, 1, 1, 1, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
@@ -64,14 +65,14 @@ print("Differences: ",differences.size())
 thresh = 3 
 
 p1_p2_cluster = torch.where(differences< thresh,1, 0 )
-print("p1_cluster :",p1_p2_cluster.size() )
+print("p1_p2_cluster :",p1_p2_cluster.size() )
 
 p1_sum = torch.sum(p1_p2_cluster, dim=3).squeeze(-1)
 print("p1_sum: ",p1_sum.size())
 
 p1_points = torch.zeros_like(input_tensor)
 p1_points = p1_sum.unsqueeze(0).unsqueeze(0) 
-print("p1 cluster: ",p1_points)
+print("p1 points: ",p1_points)
 
 p2_points = m*n - p1_points
 
@@ -89,18 +90,21 @@ print("p2_count",p2_points.eq(0).any())
 print("p1_p2_cluster size :",p1_p2_cluster.size())    
 print("unfolded tensor size :",unfolded_tensor.size())    
 print("p2_points size",p2_points.size())
-print("multiplication ", (p1_p2_cluster*unfolded_tensor).size())
+print("multiplication ", (p1_p2_cluster*unfolded_tensor))
 
 
 # Need to check calculating mu2  
 # mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True).squeeze(-1).squeeze(-1)  / p2_points
-mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=5, keepdim=True)  / p2_points
+mu2 = torch.sum(p1_p2_cluster * unfolded_tensor, dim=-1, keepdim=True).squeeze(-1).squeeze(-1) / p2_points
 
 print("mu2 size: ",mu2.size())
 
 # As in paper
 w = alpha + (p1_points - 1) * (1-alpha) * (m*n-1)
 print("w size : ",w.size())
+
+print(input_tensor[0,0,3-m1:3+m1+1,3-n1:3+n1+1])
+print(mu2[0,0,3,3])
 
 # print("p1_count:" ,torch.sum(p1_cluster))
 
