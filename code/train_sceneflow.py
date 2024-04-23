@@ -203,7 +203,7 @@ def test_sample(sample, compute_metrics=True):
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     masks = [mask]
     disp_gts = [disp_gt]
-    loss = model_loss_test(disp_ests, disp_gts, masks)
+    loss = model_loss_test(disp_ests, disp_gts, mask)
 
     scalar_outputs = {"loss": loss}
     # image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}

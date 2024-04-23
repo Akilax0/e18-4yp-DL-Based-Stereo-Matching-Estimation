@@ -119,7 +119,8 @@ def test_trainset():
         pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
         cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
 
-    print("######Bad 2.0", op / 15 * 100)
+    # print("######Bad 2.0", op / 15 * 100)
+    print("######Bad 2.0", op / 15 )
     print("######EPE", mae / 15)
 
 
