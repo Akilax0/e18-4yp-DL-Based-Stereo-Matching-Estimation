@@ -10,6 +10,8 @@ import gc
 import time
 import timm
 
+from .ResNet import *
+
 from .mgd import *
 
 class SubModule(nn.Module):
@@ -32,39 +34,78 @@ class SubModule(nn.Module):
                 m.bias.data.zero_()
 
 
+# class Feature(SubModule):
+#     def __init__(self):
+#         super(Feature, self).__init__()
+#         pretrained =  True
+#         model = timm.create_model('mobilenetv2_100', pretrained=pretrained, features_only=True)
+#         layers = [1,2,3,5,6]
+#         chans = [16, 24, 32, 96, 160]
+#         self.conv_stem = model.conv_stem
+#         self.bn1 = model.bn1
+#         self.act1 = model.act1
+
+#         self.block0 = torch.nn.Sequential(*model.blocks[0:layers[0]])
+#         self.block1 = torch.nn.Sequential(*model.blocks[layers[0]:layers[1]])
+#         self.block2 = torch.nn.Sequential(*model.blocks[layers[1]:layers[2]])
+#         self.block3 = torch.nn.Sequential(*model.blocks[layers[2]:layers[3]])
+#         self.block4 = torch.nn.Sequential(*model.blocks[layers[3]:layers[4]])
+
+#         self.deconv32_16 = Conv2x(chans[4], chans[3], deconv=True, concat=True)
+
+#     def forward(self, x):
+#         x = self.act1(self.bn1(self.conv_stem(x)))
+#         x2 = self.block0(x)
+#         x4 = self.block1(x2)
+#         # return x4,x4,x4,x4
+#         x8 = self.block2(x4)
+#         x16 = self.block3(x8)
+#         x32 = self.block4(x16)
+#         return [x4, x8, x16, x32]
+
+
 class Feature(SubModule):
+    # feaure to be replaced by resnet152
     def __init__(self):
         super(Feature, self).__init__()
-        pretrained =  True
-        model = timm.create_model('mobilenetv2_100', pretrained=pretrained, features_only=True)
-        layers = [1,2,3,5,6]
-        chans = [16, 24, 32, 96, 160]
-        self.conv_stem = model.conv_stem
+        # model = timm.create_model('mobilenetv2_100', pretrained=pretrained, features_only=True)
+        model = timm.create_model('resnet152', pretrained=True)
+        # self.feature_ext = torch.nn.Sequential(*list(model.children())[:-2])
+        
+        self.conv1 = model.conv1
         self.bn1 = model.bn1
         self.act1 = model.act1
-
-        self.block0 = torch.nn.Sequential(*model.blocks[0:layers[0]])
-        self.block1 = torch.nn.Sequential(*model.blocks[layers[0]:layers[1]])
-        self.block2 = torch.nn.Sequential(*model.blocks[layers[1]:layers[2]])
-        self.block3 = torch.nn.Sequential(*model.blocks[layers[2]:layers[3]])
-        self.block4 = torch.nn.Sequential(*model.blocks[layers[3]:layers[4]])
-
-        self.deconv32_16 = Conv2x(chans[4], chans[3], deconv=True, concat=True)
-
+        self.maxpool = model.maxpool
+        self.layer1 = model.layer1
+        self.layer2 = model.layer2
+        self.layer3 = model.layer3
+        self.layer4 = model.layer4
+        
     def forward(self, x):
-        x = self.act1(self.bn1(self.conv_stem(x)))
-        x2 = self.block0(x)
-        x4 = self.block1(x2)
-        # return x4,x4,x4,x4
-        x8 = self.block2(x4)
-        x16 = self.block3(x8)
-        x32 = self.block4(x16)
-        return [x4, x8, x16, x32]
+        # print("x: ",x.size())
+        
+        x = self.act1(self.bn1(self.conv1(x)))
+        x = self.maxpool(x)
+
+        x4 = self.layer1(x)
+        x8 = self.layer2(x4)
+        x16 = self.layer3(x8)
+        x32 = self.layer4(x16)
+        # print("x: ",x.size())
+        # print("x4: ",x4.size())
+        # print("x8: ",x8.size())
+        # print("x16: ",x16.size())
+        # print("x32: ",x32.size())
+
+        return [x4,x8,x16,x32] 
+
+
 
 class FeatUp(SubModule):
     def __init__(self):
         super(FeatUp, self).__init__()
-        chans = [16, 24, 32, 96, 160]
+        # chans = [16, 24, 32, 96, 160]
+        chans = [64, 256, 512, 1024, 2048]
         self.deconv32_16 = Conv2x(chans[4], chans[3], deconv=True, concat=True)
         self.deconv16_8 = Conv2x(chans[3]*2, chans[2], deconv=True, concat=True)
         self.deconv8_4 = Conv2x(chans[2]*2, chans[1], deconv=True, concat=True)
@@ -74,8 +115,13 @@ class FeatUp(SubModule):
 
     def forward(self, featL, featR=None):
         x4, x8, x16, x32 = featL
-
         y4, y8, y16, y32 = featR
+        
+        # print("x4: ",x4.size())
+        # print("x8: ",x8.size())
+        # print("x16: ",x16.size())
+        # print("x32: ",x32.size())
+        
         x16 = self.deconv32_16(x32, x16)
         y16 = self.deconv32_16(y32, y16)
         
@@ -86,7 +132,11 @@ class FeatUp(SubModule):
         x4 = self.conv4(x4)
         y4 = self.conv4(y4)
 
-        return [x4, x8, x16, x32], [y4, y8, y16, y32]
+        # print("x4: ",x4.size())
+        # print("x8: ",x8.size())
+        # print("x16: ",x16.size())
+        # print("x32: ",x32.size())
+        return [x4, x8, x16,x32], [y4, y8, y16,y32]
 
 
 class Context_Geometry_Fusion(SubModule):
@@ -154,11 +204,15 @@ class hourglass_fusion(nn.Module):
                                    BasicConv(in_channels*2, in_channels*2, is_3d=True, kernel_size=3, padding=1, stride=1))
 
 
-        self.CGF_32 = Context_Geometry_Fusion(in_channels*6, 160)
-        self.CGF_16 = Context_Geometry_Fusion(in_channels*4, 192)
-        self.CGF_8 = Context_Geometry_Fusion(in_channels*2, 64)
+        # self.CGF_32 = Context_Geometry_Fusion(in_channels*6, 160)
+        self.CGF_32 = Context_Geometry_Fusion(in_channels*6, 2048)
+        # self.CGF_16 = Context_Geometry_Fusion(in_channels*4, 192)
+        self.CGF_16 = Context_Geometry_Fusion(in_channels*4, 2048)
+        # self.CGF_8 = Context_Geometry_Fusion(in_channels*2, 64)
+        self.CGF_8 = Context_Geometry_Fusion(in_channels*2, 1024)
 
     def forward(self, x, imgs):
+        # print("x: ",x.size())
         conv1 = self.conv1(x)
         conv2 = self.conv2(conv1)
         conv3 = self.conv3(conv2)
@@ -169,6 +223,10 @@ class hourglass_fusion(nn.Module):
         conv2 = torch.cat((conv3_up, conv2), dim=1)
         conv2 = self.agg_0(conv2)
 
+        # print("done")
+        # print("imgs_3: ", imgs[3].size())
+        # print("imgs_2: ", imgs[2].size())
+        # print("imgs_1: ", imgs[1].size())
         conv2 = self.CGF_16(conv2, imgs[2])
         conv2_up = self.conv2_up(conv2)
 
@@ -193,8 +251,11 @@ class CGI_Stereo(nn.Module):
         super(CGI_Stereo, self).__init__()
         self.maxdisp = maxdisp 
         self.feature = Feature()
+        # self.feature_ext = Feature_Ext()
         self.feature_up = FeatUp()
-        chans = [16, 24, 32, 96, 160]
+        
+        # chans = [16, 24, 32, 96, 160]
+        chans = [64, 256, 512, 1024, 2048]
 
         self.stem_2 = nn.Sequential(
             BasicConv(3, 32, kernel_size=3, stride=2, padding=1),
@@ -209,17 +270,31 @@ class CGI_Stereo(nn.Module):
 
         self.spx = nn.Sequential(nn.ConvTranspose2d(2*32, 9, kernel_size=4, stride=2, padding=1),)
         self.spx_2 = Conv2x(32, 32, True)
+        # self.spx_4 = nn.Sequential(
+        #     BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
+        #     nn.Conv2d(32, 32, 3, 1, 1, bias=False),
+        #     nn.BatchNorm2d(32), nn.ReLU()
+        #     )
         self.spx_4 = nn.Sequential(
-            BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
+            BasicConv(560, 32, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(32, 32, 3, 1, 1, bias=False),
             nn.BatchNorm2d(32), nn.ReLU()
             )
 
-        self.conv = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
+        # self.conv = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
+        self.conv = BasicConv(560, 48, kernel_size=3, padding=1, stride=1)
         self.desc = nn.Conv2d(48, 48, kernel_size=1, padding=0, stride=1)
+        
+        
+        # self.semantic = nn.Sequential(
+        #     BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
+        #     nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
+
         self.semantic = nn.Sequential(
-            BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
+            BasicConv(560, 32, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
+        
+        
         self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
         self.hourglass_fusion = hourglass_fusion(8)
         self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
@@ -229,41 +304,42 @@ class CGI_Stereo(nn.Module):
         features_left = self.feature(left)
         features_right = self.feature(right)
 
-        print("x4: ",features_left[0].size())
-        print("x8: ",features_left[1].size())
-        print("x16: ",features_left[2].size())
-        print("x32: ",features_left[3].size())
+        # print("left image: ",left.size()) 
+        # print("feature left: ",features_left.size())
 
         features_left, features_right = self.feature_up(features_left, features_right)
-        # Upscaled 4,8,16,32
+        
+
+        # Upscaled 2,4,8,16
         ll = features_left
         rl = features_right
         
-        print("x4: ",features_left[0].size())
-        print("x8: ",features_left[1].size())
-        print("x16: ",features_left[2].size())
-        print("x32: ",features_left[3].size())
+        # print("left , right features: ",len(ll))
+        # print("feature_left: ",features_left[2].size())
         
-        print("feature_left: ",features_left[0].size())
         stem_2x = self.stem_2(left)
         stem_4x = self.stem_4(stem_2x)
         stem_2y = self.stem_2(right)
         stem_4y = self.stem_4(stem_2y)
-        print("stem_2x , stem_4x size: ",stem_2x.size(), stem_4x.size())
+        # print("stem_2x , stem_4x size: ",stem_2x.size(), stem_4x.size())
 
         features_left[0] = torch.cat((features_left[0], stem_4x), 1)
         features_right[0] = torch.cat((features_right[0], stem_4y), 1)
-        print("feature map 1/4 : ",features_left[0].size())
+        # print("feature map 1/4 : ",features_left[0].size())
 
 
         match_left = self.desc(self.conv(features_left[0]))
         match_right = self.desc(self.conv(features_right[0]))
+        # print("match _left : ",match_left.size())
 
         corr_volume = build_norm_correlation_volume(match_left, match_right, self.maxdisp//4)
         corr_volume = self.corr_stem(corr_volume)
         feat_volume = self.semantic(features_left[0]).unsqueeze(2)
+
         volume = self.agg(feat_volume * corr_volume)
+        # print("volume: ",volume.size())
         cost,conv8= self.hourglass_fusion(volume, features_left)
+        # print("match _left : ",match_left.size())
 
         xspx = self.spx_4(features_left[0])
         xspx = self.spx_2(xspx, stem_2x)
@@ -280,7 +356,7 @@ class CGI_Stereo(nn.Module):
             # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
             # Commenting out before focusing on features for cfnet
             # features_left[0],volume,cost,conv8
-            return [pred_up*4, pred.squeeze(1)*4],ll,rl,volume,cost,conv8
+            return [pred_up*4, pred.squeeze(1)*4],ll,rl
 
         else:
             return [pred_up*4]

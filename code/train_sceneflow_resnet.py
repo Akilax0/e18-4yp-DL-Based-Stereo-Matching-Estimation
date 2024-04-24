@@ -14,7 +14,8 @@ import numpy as np
 import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
-from models import __models__, model_loss_train, model_loss_test
+# from models import __models__, model_loss_train, model_loss_test
+from models_cgi_resnet import __models__, model_loss_train, model_loss_test
 from utils import *
 from torch.utils.data import DataLoader
 import gc
@@ -165,7 +166,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,_,_,_,_,_= model(imgL, imgR)
+    disp_ests,_,_= model(imgL, imgR)
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
@@ -203,7 +204,7 @@ def test_sample(sample, compute_metrics=True):
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     masks = [mask]
     disp_gts = [disp_gt]
-    loss = model_loss_test(disp_ests, disp_gts, mask)
+    loss = model_loss_test(disp_ests, disp_gts, masks)
 
     scalar_outputs = {"loss": loss}
     # image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}

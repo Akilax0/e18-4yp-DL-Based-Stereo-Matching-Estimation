@@ -1,3 +1,11 @@
+'''
+Code for disilling 
+from CGI res 152 -> CGI
+
+Aim is to have better feature extraction 
+
+'''
+
 from __future__ import print_function, division
 import argparse
 import os
@@ -14,7 +22,12 @@ import numpy as np
 import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
-from models import __models__, model_loss_train, model_loss_test
+
+# # 
+from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+from models_cgi_resnet import __t_models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+
+
 from utils import *
 from torch.utils.data import DataLoader
 import gc
@@ -23,10 +36,14 @@ cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
-parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
-parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__models__.keys())
-parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
+parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
+# Additional Args
+parser.add_argument('--t_model', default='cfnet', help='select a teacher model structure', choices=__models__.keys())
+parser.add_argument('--t_loadckpt', default='./pretrained/cf_sceneflow.ckpt', help='load the weights from pretrained teacher')
+
+parser.add_argument('--model', default='CGI_Stereo', help='select a student model structure', choices=__models__.keys())
+parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
 parser.add_argument('--dataset', default='sceneflow', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default="/data/sceneflow/", help='data path')
 parser.add_argument('--trainlist', default='./filenames/sceneflow_train.txt', help='training list')
@@ -42,12 +59,10 @@ parser.add_argument('--batch_size', type=int, default=20, help='training batch s
 parser.add_argument('--test_batch_size', type=int, default=20, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
 parser.add_argument('--lrepochs', type=str, default="10,14,16,18:2", help='the epochs to decay lr: the downscale rate')
-
 parser.add_argument('--logdir', default='', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default='', help='load the weights from a specific checkpoint')
 parser.add_argument('--resume', action='store_true', help='continue training the model')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
-
 parser.add_argument('--summary_freq', type=int, default=20, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=1, help='the frequency of saving checkpoint')
 
@@ -68,11 +83,18 @@ test_dataset = StereoDataset(args.datapath, args.testlist, False)
 TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=8, drop_last=True)
 TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=4, drop_last=False)
 
+#STUDENT
 # model, optimizer
 model = __models__[args.model](args.maxdisp)
 model = nn.DataParallel(model)
 model.cuda()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))
+
+#TEACHER CGI resnet
+# model, optimizer
+t_model = __t_models__[args.t_model](args.maxdisp)
+t_model = nn.DataParallel(t_model)
+t_model.cuda()
 
 # load parameters
 start_epoch = 0
@@ -96,6 +118,15 @@ elif args.loadckpt:
     model_dict.update(pre_dict) 
     # model.load_state_dict(state_dict['model'])
     model.load_state_dict(model_dict)
+
+# Loading teacher model
+# Have to load pretrained for CFNET
+print("loading teacher model {}".format(args.t_loadckpt))
+t_state_dict = torch.load(args.t_loadckpt)
+print("state dict: ",t_state_dict.keys())
+t_model.load_state_dict(t_state_dict['model'])
+
+
 print("start at epoch {}".format(start_epoch))
 
 
@@ -165,12 +196,115 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,_,_,_,_,_= model(imgL, imgR)
+    disp_ests,s_ll,s_rl = model(imgL, imgR)
+
+    with torch.no_grad():
+        # evaluate mode on teacher
+        t_model.eval()
+        # teacher disp ests
+        disp_ests,t_ll,t_rl = model(imgL, imgR)
+
+    # introducing CFNet
+    # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
+    # print("umaps outputs ",t_umaps[0].size(),t_umaps[1].size(),t_umaps[2].size())
+    # print("umaps 1/8 output ",t_umaps[0].min() , t_umaps[0].max())
+    # print("umaps 1/4 output ",t_umaps[1].min() , t_umaps[1].max())
+    # print("umaps 1/2 output ",t_umaps[2].min() , t_umaps[2].max())
+    
+
+    t_down_umaps = []
+    t_down_umaps.append(t_umaps[-1]) #1/2
+    t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/4
+    t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
+    t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
+    t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/32
+    
+    # for i in range(len(t_down_umaps)):
+    #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
+
+    '''
+    Features from student as s_ll,s_rl
+    [1/4,1/8,1/16,1/32]
+    Features from teacher as t_ll,t_rl
+    [1/2,1/4,1/8,1/16,1/32]
+    
+    '''
+    
+
+
+    # left features aligned 
+    s_ll[0] = align(s_ll[0],s_ll[0].size()[1],t_ll[1].size()[1])
+    s_ll[1] = align(s_ll[1],s_ll[1].size()[1],t_ll[2].size()[1])
+    s_ll[2] = align(s_ll[2],s_ll[2].size()[1],t_ll[3].size()[1])
+    s_ll[3] = align(s_ll[3],s_ll[3].size()[1],t_ll[4].size()[1])
+
+    # right features aligned 
+    s_rl[0] = align(s_rl[0],s_rl[0].size()[1],t_rl[1].size()[1])
+    s_rl[1] = align(s_rl[1],s_rl[1].size()[1],t_rl[2].size()[1])
+    s_rl[2] = align(s_rl[2],s_rl[2].size()[1],t_rl[3].size()[1])
+    s_rl[3] = align(s_rl[3],s_rl[3].size()[1],t_rl[4].size()[1])
+    
+    # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
+    # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
+    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
+    # print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
+
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
     disp_gts = [disp_gt, disp_gt_low] 
+
     loss = model_loss_train(disp_ests, disp_gts, masks)
+    # print("loss ",loss)
+
+    kd_loss = 0
+    feat_loss = 0
+    cvolume_loss = 0
+    conv4_loss = 0 
+    conv8_loss = 0
+    
+    lambda_feat = 0.001
+    lambda_cvolume = 0 
+    lambda_conv4 = 0 
+    lambda_conv8 = 0 
+    
+    # using default value
+    # change according to usecase
+    # classificatio = 0.5
+    # semantic = 0.75
+    # detection / instance - 0.45
+    lambda_mgd = 0.5
+
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[0])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd)  
+    
+
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[0])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd)  
+
+    # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
+    # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
+    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+
+
+    kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
+        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss
+
+    # print("feature loss ",feat_loss)
+    # print("cvolume loss ",cvolume_loss)
+    # print("conv4 loss ",conv4_loss)
+    # print("conv8 loss ",conv8_loss)
+    # print("loss",loss)
+
+    loss = loss + kd_loss
+    # print("loss sum ",loss)
+    
+    
     disp_ests_final = [disp_ests[0]]
 
     scalar_outputs = {"loss": loss}
@@ -186,6 +320,7 @@ def train_sample(sample, compute_metrics=False):
     loss.backward()
     optimizer.step()
 
+    # Add knoledge distillation error here
     return tensor2float(loss), tensor2float(scalar_outputs)
 
 
@@ -203,7 +338,7 @@ def test_sample(sample, compute_metrics=True):
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     masks = [mask]
     disp_gts = [disp_gt]
-    loss = model_loss_test(disp_ests, disp_gts, mask)
+    loss = model_loss_test(disp_ests, disp_gts, masks)
 
     scalar_outputs = {"loss": loss}
     # image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
@@ -219,6 +354,111 @@ def test_sample(sample, compute_metrics=True):
 
     return tensor2float(loss), tensor2float(scalar_outputs)
 
+def align(student,student_channels,teacher_channels):
+    # Given two tensors of different channel numbers 
+    # align the two with a 1x1 kernel
+    
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = student.device
+
+    # print("student and teacher channels",student_channels, teacher_channels)
+    # print("Types: ",student.type())
+    if student_channels!= teacher_channels and len(student.size())==4:
+        m = nn.Conv2d(student_channels, teacher_channels, kernel_size=1, stride=1, padding=0).to(device)
+    elif student_channels!= teacher_channels and len(student.size())==5:
+        m = nn.Conv3d(student_channels, teacher_channels, kernel_size=(1,1,1), stride=1, padding=0).to(device)
+    else:
+        m = None
+        return student
+
+    return m(student)
+
+def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None):
+
+
+    N, C, H, W = preds_T.shape
+
+    device = preds_S.device
+    
+    # print("device: " ,device)
+
+    generation = nn.Sequential(
+            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+
+
+    mat = torch.rand((N,1,H,W)).to(device) 
+    # print("matrix: " ,mat.size())
+
+    # mask generation
+    mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
+    # print("matrix: " ,mat.size())
+
+    # threshold for umaps
+    thresh = 0.5
+
+    if mask is not None:
+        ma = mask.max()
+        mi = mask.min()
+        thr = mi + (ma-mi) * thresh
+        mat  = torch.where(mask > thr, 0, 1).to(device)
+
+
+
+    # mask aligned student 
+    masked_feat = torch.mul(preds_S, mat)
+    # print("masked_feat: " ,masked_feat.size())
+    
+    # Genearate feature from student to be compared with teacher
+    new_feat = generation(masked_feat)
+    # print("New feat: " ,new_feat.size())
+
+    # calculate distilation loss
+    # check the implementation here for distillation loss
+    # dis_loss = loss_mse(new_feat, preds_T)/N
+    dis_loss = F.mse_loss(new_feat,preds_T)
+    # print("dis_loss : " ,dis_loss.size())
+
+    return dis_loss
+
+def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15):
+
+
+    N, C, D, H, W = preds_T.shape
+
+    device = preds_S.device
+    
+    # print("device: " ,device)
+
+    generation = nn.Sequential(
+            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+
+
+    mat = torch.rand((N,1,D,H,W)).to(device) 
+    # print("matrix: " ,mat.size())
+
+    # mask generation
+    mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
+    # print("matrix: " ,mat.size())
+
+    # mask aligned student 
+    masked_feat = torch.mul(preds_S, mat)
+    # print("masked_feat: " ,masked_feat.size())
+    
+    # Genearate feature from student to be compared with teacher
+    new_feat = generation(masked_feat)
+    # print("New feat: " ,new_feat.size())
+
+    # calculate distilation loss
+    # check the implementation here for distillation loss
+    # dis_loss = loss_mse(new_feat, preds_T)/N
+    dis_loss = F.mse_loss(new_feat,preds_T)
+    # print("dis_loss : " ,dis_loss)
+
+    return dis_loss
 
 if __name__ == '__main__':
     train()
