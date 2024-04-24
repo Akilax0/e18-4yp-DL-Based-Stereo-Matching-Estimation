@@ -3,17 +3,12 @@
 
 Code for distilling knowledge with masks
 
+ACVNET -> CGI 
 
-Following Maked autoencoder for knolwedge distillation
+ACVNET distillation using umaps
+feature distillation done while interpolating the umaps
+only single scale
 
-The student backbone is with masked convolutions. 
-Either using Skip connections or as in image inpainting where we leave out the masked parts.
-
-Once run on student the result is aligned and generated to the same resolution of teacher to 
-be compared for the disitllation . 
-
-
-The Generation (decoder) can be done according to MGD without using transfomers. 
 
 
 '''

@@ -1,11 +1,13 @@
 '''
 
 Code for distilling knowledge with masks
-The masks are from uncerrtainty maps from CFNet
+CFNET -> CGI distillation
 
-TBD on which implememntaion 
-1. Masked Generative Distillation
-2. Using CFNet as a teacher
+
+multiscale feature distillation using umaps 
+umaps are interpolated to fit the various scales
+random masking is also available if umap is not 
+
 
 '''
 
