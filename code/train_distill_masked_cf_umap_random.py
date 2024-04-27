@@ -31,7 +31,7 @@ from datasets import __datasets__
 # # 
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 
-
+from ranking_loss import *
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 from models_cf import __t_models__, model_loss 
 
@@ -411,6 +411,8 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         mi = mask.min()
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
+        # Expand mask here 
+        # mat1 = edgeGuidedSampling(  ,mat,H,W)
 
 
 
