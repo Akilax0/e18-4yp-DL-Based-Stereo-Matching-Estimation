@@ -16,6 +16,8 @@ from tqdm import tqdm, trange
 from datasets import middlebury_loader as mb
 
 from models import __models__
+# from models_cgi_resnet import __models__
+
 from utils import *
 from torch.utils.data import DataLoader
 import gc

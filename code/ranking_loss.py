@@ -55,13 +55,29 @@ def sub2ind(r, c, cols):
     idx = r * cols + c
     return idx
 
+def edgeGuidedSampling(pred_S,mask, h, w):
+    print("pred_s: ",pred_S.size())
+    print("mask: ",mask.size())
+    print("h & w: ",h,w)
+    
+    edges_loc = mask.nonzero()
+    print("edges_loc: ",edges_loc.size())
+    
+    minlen = edges_loc.size()[0]
+    
+    sample_num = minlen
+    index_anchors = torch.randint(0, minlen, (sample_num,))
+
+
+
+
 def edgeGuidedSampling(inputs, targets, edges_img, thetas_img, masks, h, w):
 
     # find edges
     edges_max = edges_img.max()
     edges_mask = edges_img.ge(edges_max*0.1)
     edges_loc = edges_mask.nonzero()
-
+    
     inputs_edge = torch.masked_select(inputs, edges_mask)
     targets_edge = torch.masked_select(targets, edges_mask)
     thetas_edge = torch.masked_select(thetas_img, edges_mask)
@@ -73,6 +89,7 @@ def edgeGuidedSampling(inputs, targets, edges_img, thetas_img, masks, h, w):
     anchors = torch.gather(inputs_edge, 0, index_anchors)
     theta_anchors = torch.gather(thetas_edge, 0, index_anchors)
     row_anchors, col_anchors = ind2sub(edges_loc[index_anchors].squeeze(1), w)
+
     ## compute the coordinates of 4-points,  distances are from [2, 30]
     distance_matrix = torch.randint(2, 31, (4,sample_num)).cuda()
     pos_or_neg = torch.ones(4, sample_num).cuda()
@@ -104,6 +121,7 @@ def edgeGuidedSampling(inputs, targets, edges_img, thetas_img, masks, h, w):
     masks_B = torch.gather(masks, 0, B.long())
 
     return inputs_A, inputs_B, targets_A, targets_B, masks_A, masks_B, sample_num
+    # return mask
 
 ######################################################
 # EdgeguidedRankingLoss (with regularization term)

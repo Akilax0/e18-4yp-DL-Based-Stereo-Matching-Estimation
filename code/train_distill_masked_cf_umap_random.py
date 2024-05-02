@@ -41,7 +41,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -412,7 +412,9 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
         # Expand mask here 
-        # mat1 = edgeGuidedSampling(  ,mat,H,W)
+        mat = random_masking(mat)
+        
+        # print("mask comparison: ",mat.size(),mat1.size())
 
 
 
@@ -469,6 +471,48 @@ def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_
     # print("dis_loss : " ,dis_loss)
 
     return dis_loss
+
+def random_masking(mask):
+    # The fuinction adds same number of random points as 
+    # the number of uncertainty points
+    
+    #Currnetly uncertainty mask is created by the teacher. 
+    # And what we do is mask the sections that the TEACHER is 
+    # uncertain about. 
+    # So we have a lot of 1s in the mask -> diistillation pixels
+    # and only a few pixels that are masked.
+    
+    # Now we are increasing the 0s locations in this function
+
+    print("mask input size : ",mask.size())
+    # print("mask: ",mask)
+    mask_1_loc = mask.nonzero() 
+    # print("number of uncertainty points: ",mask_1_loc.size())
+    
+    mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
+    # print("mask  0 locations: ",mask_0_loc)
+    
+    random_indices = torch.randperm(len(mask_1_loc))[:mask_0_loc]
+
+    selected_tensors = [mask_1_loc[i] for i in random_indices]
+        
+    # print("num of selected tensors: ",len(selected_tensors))    
+    
+    # for i in selected_tensors:
+    #     print("sele tensor : ", i)
+
+    selected_tensors = torch.stack(selected_tensors,dim=0)
+
+    # print("location tensors: ",selected_tensors.size())
+    # row , col = selected_tensors[:,2],selected_tensors[:,3]
+
+    # mask[0,0,row,col] = 0 
+    mask[selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2],selected_tensors[:,3]] = 0 
+    # print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
+
+    # print("mask: ",mask)
+    return mask
+
 
 if __name__ == '__main__':
     train()
