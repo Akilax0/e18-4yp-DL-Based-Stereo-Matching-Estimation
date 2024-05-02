@@ -70,7 +70,6 @@ class Feature(SubModule):
         super(Feature, self).__init__()
         # model = timm.create_model('mobilenetv2_100', pretrained=pretrained, features_only=True)
         model = timm.create_model('resnet152', pretrained=True)
-        # self.feature_ext = torch.nn.Sequential(*list(model.children())[:-2])
         
         self.conv1 = model.conv1
         self.bn1 = model.bn1
@@ -251,7 +250,6 @@ class CGI_Stereo(nn.Module):
         super(CGI_Stereo, self).__init__()
         self.maxdisp = maxdisp 
         self.feature = Feature()
-        # self.feature_ext = Feature_Ext()
         self.feature_up = FeatUp()
         
         # chans = [16, 24, 32, 96, 160]
@@ -343,20 +341,34 @@ class CGI_Stereo(nn.Module):
 
         xspx = self.spx_4(features_left[0])
         xspx = self.spx_2(xspx, stem_2x)
+        # print("xpx: ",xspx.size())
         spx_pred = self.spx(xspx)
+        # print("spx_pre: ",spx_pred.size())
         spx_pred = F.softmax(spx_pred, 1)
 
         disp_samples = torch.arange(0, self.maxdisp//4, dtype=cost.dtype, device=cost.device)
         disp_samples = disp_samples.view(1, self.maxdisp//4, 1, 1).repeat(cost.shape[0],1,cost.shape[3],cost.shape[4])
-        pred = regression_topk(cost.squeeze(1), disp_samples, 2)
+
+        # pred,prob = regression_topk(cost.squeeze(1), disp_samples, 2)
+        pred,prob = regression_topk(cost.squeeze(1), disp_samples, self.maxdisp//4)
+
         pred_up = context_upsample(pred, spx_pred)
 
+        # b, c, h, w = prob.shape
+        # prob_up = F.interpolate(prob,(h*4,w*4),mode='nearest').reshape(b,self.maxdisp,h*4,w*4)
+
+        # # print("prob up: ",prob_up.size())
+        # print("disp samples: ",disp_samples.size())
+        # print("pred: ",pred.size())
+        # print("pred_up: ",pred_up.size())
+
+        # Calculting umap
+        pred2_cur = pred.detach()
+        pred2_umap = disparity_variance(prob, self.maxdisp//4, pred2_cur)
 
         if self.training:
-            # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
-            # Commenting out before focusing on features for cfnet
-            # features_left[0],volume,cost,conv8
-            return [pred_up*4, pred.squeeze(1)*4],ll,rl
+            return [pred_up*4, pred.squeeze(1)*4]
 
         else:
-            return [pred_up*4]
+            # Outputting left and right features along with the uncertainity map during inference.
+            return [pred_up*4],ll,rl,[pred2_umap]

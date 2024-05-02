@@ -229,31 +229,31 @@ class CGI_Stereo(nn.Module):
         features_left = self.feature(left)
         features_right = self.feature(right)
 
-        print("x4: ",features_left[0].size())
-        print("x8: ",features_left[1].size())
-        print("x16: ",features_left[2].size())
-        print("x32: ",features_left[3].size())
+        # print("x4: ",features_left[0].size())
+        # print("x8: ",features_left[1].size())
+        # print("x16: ",features_left[2].size())
+        # print("x32: ",features_left[3].size())
 
         features_left, features_right = self.feature_up(features_left, features_right)
         # Upscaled 4,8,16,32
         ll = features_left
         rl = features_right
         
-        print("x4: ",features_left[0].size())
-        print("x8: ",features_left[1].size())
-        print("x16: ",features_left[2].size())
-        print("x32: ",features_left[3].size())
+        # print("x4: ",features_left[0].size())
+        # print("x8: ",features_left[1].size())
+        # print("x16: ",features_left[2].size())
+        # print("x32: ",features_left[3].size())
         
-        print("feature_left: ",features_left[0].size())
+        # print("feature_left: ",features_left[0].size())
         stem_2x = self.stem_2(left)
         stem_4x = self.stem_4(stem_2x)
         stem_2y = self.stem_2(right)
         stem_4y = self.stem_4(stem_2y)
-        print("stem_2x , stem_4x size: ",stem_2x.size(), stem_4x.size())
+        # print("stem_2x , stem_4x size: ",stem_2x.size(), stem_4x.size())
 
         features_left[0] = torch.cat((features_left[0], stem_4x), 1)
         features_right[0] = torch.cat((features_right[0], stem_4y), 1)
-        print("feature map 1/4 : ",features_left[0].size())
+        # print("feature map 1/4 : ",features_left[0].size())
 
 
         match_left = self.desc(self.conv(features_left[0]))
@@ -280,7 +280,7 @@ class CGI_Stereo(nn.Module):
             # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
             # Commenting out before focusing on features for cfnet
             # features_left[0],volume,cost,conv8
-            return [pred_up*4, pred.squeeze(1)*4],ll,rl,volume,cost,conv8
+            return [pred_up*4, pred.squeeze(1)*4],ll,rl#,volume,cost,conv8
 
         else:
             return [pred_up*4]

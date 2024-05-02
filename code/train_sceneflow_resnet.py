@@ -14,8 +14,12 @@ import numpy as np
 import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
+
 # from models import __models__, model_loss_train, model_loss_test
-from models_cgi_resnet import __models__, model_loss_train, model_loss_test
+# from models_cgi_resnet import __models__, model_loss_train, model_loss_test
+from models_cgi_resnet_full import __models__, model_loss_train, model_loss_test
+
+
 from utils import *
 from torch.utils.data import DataLoader
 import gc

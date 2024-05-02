@@ -273,11 +273,12 @@ class ACVNet(nn.Module):
             # Outputting uncertainty maps for distillation
             pred2_cur = pred2.detach()
             
-            # print("pred2_prob: ",pred2_prob.size())
-            # print("max disp: ",self.maxdisp)
-            # print("pred2_prob: ",pred2_cur.size())
+            print("pred2_cur: ",pred2_cur.size())
+            print("pred2_prob: ",pred2_prob.size())
+            print("max disp: ",self.maxdisp)
+            print("pred2_prob: ",pred2_cur.size())
             pred2_umap = disparity_variance(pred2_prob, self.maxdisp, pred2_cur)
-            # print("pred2_umap: ",pred2_umap.size())
+            print("pred2_umap: ",pred2_umap.size())
 
             # modified to output left feature map,cost volume, last 2 layers of deconv
             return [pred2],features_left['gwc_feature'],features_right['gwc_feature'],ac_volume,out2,out2_1,pred2_umap
