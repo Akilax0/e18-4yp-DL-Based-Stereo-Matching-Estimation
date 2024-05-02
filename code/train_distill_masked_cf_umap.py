@@ -1,11 +1,13 @@
 '''
 
 Code for distilling knowledge with masks
-The masks are from uncerrtainty maps from CFNet
+CFNET -> CGI distillation
 
-TBD on which implememntaion 
-1. Masked Generative Distillation
-2. Using CFNet as a teacher
+
+multiscale feature distillation using umaps 
+umaps are interpolated to fit the various scales
+random masking is also available if umap is not 
+
 
 '''
 
@@ -39,7 +41,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -201,14 +203,14 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl = model(imgL, imgR)
+    disp_ests,s_ll,s_rl,_,_,_ = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
         t_model.eval()
         # teacher disp ests
         # t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
-        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
+        t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,_,t_umaps = t_model(imgL,imgR)
 
     # introducing CFNet
     # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
@@ -281,16 +283,16 @@ def train_sample(sample, compute_metrics=False):
     # detection / instance - 0.45
     lambda_mgd = 0.5
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[0])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd)  
-    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
     
 
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_umaps[0])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd)  
-    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1] )  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 

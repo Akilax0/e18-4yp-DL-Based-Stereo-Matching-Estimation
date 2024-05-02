@@ -14,6 +14,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 from models import __models__
+# from models_cgi_resnet import __models__
+
 from datasets import ETH3D_loader as et
 from datasets.readpfm import readPFM
 import cv2
