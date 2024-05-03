@@ -130,6 +130,8 @@ def disparity_variance(x, maxdisp, disparity):
     disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
     disp_values = disp_values.view(1, maxdisp, 1, 1)
     disp_values = (disp_values - disparity) ** 2
+    
+    # print("x & disp_values: ",x.size() , disp_values.size())
     return torch.sum(x * disp_values, 1, keepdim=True)
 
 def disparity_variance_confidence(x, disparity_samples, disparity):

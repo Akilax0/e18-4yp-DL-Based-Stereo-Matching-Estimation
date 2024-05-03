@@ -558,6 +558,8 @@ class cfnet(nn.Module):
         pred2_s4_cur = pred2_s4.detach()
         # uncertainty calculation
         pred2_v_s4 = disparity_variance(pred2_possibility_s4, self.maxdisp // 8, pred2_s4_cur)  # get the variance
+        # print(" =================== CFNET ==========================")
+        # print("pred2_prob , pred: ",pred2_possibility_s4.size(),pred2_s4_cur.size())
         umaps.append(pred2_s4)
 
         pred2_v_s4 = pred2_v_s4.sqrt()
@@ -625,7 +627,13 @@ class cfnet(nn.Module):
 
         # Is this the uncertainty estimation we need?
 
+        # print("cost1_s2_possibility: ",cost1_s2_possibility.size())
+        # print("disparity Samples: ",disparity_samples_s2.size())
+        # print("pred_s2: ",pred1_s2.size() )
+
         pred1_v_s2 = disparity_variance_confidence(cost1_s2_possibility, disparity_samples_s2, pred1_s2)
+        
+        # print("umap size cfnet: ",pred1_v_s2.size())
         umaps.append(pred1_v_s2)
 
         # pred1_v_s2 = pred1_v_s2.sqrt()
