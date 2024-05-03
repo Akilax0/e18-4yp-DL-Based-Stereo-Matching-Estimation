@@ -276,11 +276,13 @@ def train_sample(sample, compute_metrics=False):
     cvolume_loss = 0
     conv4_loss = 0 
     conv8_loss = 0
+    logit_loss = 0
     
     lambda_feat = 0.001
     lambda_cvolume = 0 
     lambda_conv4 = 0 
     lambda_conv8 = 0 
+    lambda_logit = 0.001
     
     # using default value
     # change according to usecase
@@ -306,17 +308,17 @@ def train_sample(sample, compute_metrics=False):
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    
+    # print("disp_ests: ",disp_ests[0].size())
+    # print("teacher pred: ",t_pred1_s2[0].size())
+    sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
+    sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
+    logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
-        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss
-
-    # print("feature loss ",feat_loss)
-    # print("cvolume loss ",cvolume_loss)
-    # print("conv4 loss ",conv4_loss)
-    # print("conv8 loss ",conv8_loss)
-    # print("loss",loss)
-
+        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + logit_loss * lambda_logit
+        
     loss = loss + kd_loss
     # print("loss sum ",loss)
     
