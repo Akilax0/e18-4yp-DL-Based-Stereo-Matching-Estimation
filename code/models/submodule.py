@@ -217,7 +217,9 @@ def context_upsample(depth_low, up_weights):
     return depth
 
 
-def regression_topk(cost, disparity_samples, k):
+def regression_topk(cost, disparity_samples, k,d):
+    # addiditonal argument d
+    cost1 = cost
 
     _, ind = cost.sort(1, True)
     pool_ind = ind[:, :k]
@@ -225,7 +227,31 @@ def regression_topk(cost, disparity_samples, k):
     prob = F.softmax(cost, 1)
     disparity_samples = torch.gather(disparity_samples, 1, pool_ind)    
     pred = torch.sum(disparity_samples * prob, dim=1, keepdim=True)
-    return pred
+    
+    # Need to output the probabbility of full level of diparity 
+    pool_ind = ind[:,:d] 
+    cost = torch.gather(cost1, 1, pool_ind)
+    prob = F.softmax(cost, 1)
+
+    return pred , prob
     
 
-
+# Creating uncertainty maps
+def disparity_variance(x, maxdisp, disparity):
+    # the shape of disparity should be B,1,H,W, return is the variance of the cost volume [B,1,H,W]
+    assert len(x.shape) == 4
+    disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
+    disp_values = disp_values.view(1, maxdisp, 1, 1)
+    disp_values = (disp_values - disparity) ** 2
+    
+    # print("x & disp_values: ",x.size() , disp_values.size())
+    return torch.sum(x * disp_values, 1, keepdim=True)
+                     
+def disparity_variance_confidence(x, disparity_samples, disparity):
+    # the shape of disparity should be B,1,H,W, return is the uncertainty estimation
+    assert len(x.shape) == 4
+    disparity = disparity.unsqueeze(1)
+    
+    # print("disparity: ",disparity.size(),disparity_samples.size())
+    disp_values = (disparity - disparity_samples) ** 2
+    return torch.sum(x * disp_values, 1, keepdim=True)
