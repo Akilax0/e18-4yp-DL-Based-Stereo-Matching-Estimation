@@ -362,9 +362,10 @@ class CGI_Stereo(nn.Module):
         # print("pred: ",pred.size())
         # print("pred_up: ",pred_up.size())
 
-        # Calculting umap
+        # # Calculting umap
         pred2_cur = pred.detach()
-        pred2_umap = disparity_variance(prob, self.maxdisp//4, pred2_cur)
+        # # Please check this i think this is wrong
+        pred2_umap = disparity_variance_confidence(prob, self.maxdisp//4, pred2_cur)
 
         if self.training:
             return [pred_up*4, pred.squeeze(1)*4]

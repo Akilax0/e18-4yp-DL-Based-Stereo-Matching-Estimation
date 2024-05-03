@@ -203,7 +203,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl,_,_,_ = model(imgL, imgR)
+    disp_ests,s_ll,s_rl = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -484,7 +484,7 @@ def random_masking(mask):
     
     # Now we are increasing the 0s locations in this function
 
-    print("mask input size : ",mask.size())
+    # print("mask input size : ",mask.size())
     # print("mask: ",mask)
     mask_1_loc = mask.nonzero() 
     # print("number of uncertainty points: ",mask_1_loc.size())

@@ -246,3 +246,9 @@ def disparity_variance(x, maxdisp, disparity):
     # print("disparity values: ",disparity.size())
     disp_values = (disp_values - disparity) ** 2
     return torch.sum(x * disp_values, 1, keepdim=True)
+
+def disparity_variance_confidence(x, disparity_samples, disparity):
+    # the shape of disparity should be B,1,H,W, return is the uncertainty estimation
+    assert len(x.shape) == 4
+    disp_values = (disparity - disparity_samples) ** 2
+    return torch.sum(x * disp_values, 1, keepdim=True)
