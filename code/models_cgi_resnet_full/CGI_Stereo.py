@@ -70,7 +70,6 @@ class Feature(SubModule):
         super(Feature, self).__init__()
         # model = timm.create_model('mobilenetv2_100', pretrained=pretrained, features_only=True)
         model = timm.create_model('resnet152', pretrained=True)
-        # self.feature_ext = torch.nn.Sequential(*list(model.children())[:-2])
         
         self.conv1 = model.conv1
         self.bn1 = model.bn1
@@ -269,6 +268,7 @@ class CGI_Stereo(nn.Module):
             )
 
         self.spx = nn.Sequential(nn.ConvTranspose2d(2*32, 9, kernel_size=4, stride=2, padding=1),)
+        # self.spx_2 = Conv2x(32, 32, True)
         self.spx_2 = Conv2x(32, 32, True)
         # self.spx_4 = nn.Sequential(
         #     BasicConv(96, 32, kernel_size=3, stride=1, padding=1),
@@ -276,14 +276,14 @@ class CGI_Stereo(nn.Module):
         #     nn.BatchNorm2d(32), nn.ReLU()
         #     )
         self.spx_4 = nn.Sequential(
-            BasicConv(560, 32, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(32, 32, 3, 1, 1, bias=False),
+            BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(187, 32, 3, 1, 1, bias=False),
             nn.BatchNorm2d(32), nn.ReLU()
             )
 
         # self.conv = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
-        self.conv = BasicConv(560, 48, kernel_size=3, padding=1, stride=1)
-        self.desc = nn.Conv2d(48, 48, kernel_size=1, padding=0, stride=1)
+        self.conv = BasicConv(560, 280, kernel_size=3, padding=1, stride=1)
+        self.desc = nn.Conv2d(280, 280, kernel_size=1, padding=0, stride=1)
         
         
         # self.semantic = nn.Sequential(
@@ -291,13 +291,16 @@ class CGI_Stereo(nn.Module):
         #     nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
 
         self.semantic = nn.Sequential(
-            BasicConv(560, 32, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(32, 8, kernel_size=1, padding=0, stride=1, bias=False))
+            BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(187, 46, kernel_size=1, padding=0, stride=1, bias=False))
         
         
-        self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
-        self.hourglass_fusion = hourglass_fusion(8)
-        self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+        # self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        self.agg = BasicConv(46, 46, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        # self.hourglass_fusion = hourglass_fusion(8)
+        self.hourglass_fusion = hourglass_fusion(46)
+        # self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+        self.corr_stem = BasicConv(1, 46, is_3d=True, kernel_size=3, stride=1, padding=1)
 
     def forward(self, left, right):
 
@@ -321,6 +324,9 @@ class CGI_Stereo(nn.Module):
         stem_4x = self.stem_4(stem_2x)
         stem_2y = self.stem_2(right)
         stem_4y = self.stem_4(stem_2y)
+
+ 
+        # print("left , right : ",left.size(),right.size())
         # print("stem_2x , stem_4x size: ",stem_2x.size(), stem_4x.size())
 
         features_left[0] = torch.cat((features_left[0], stem_4x), 1)
@@ -333,15 +339,20 @@ class CGI_Stereo(nn.Module):
         # print("match _left : ",match_left.size())
 
         corr_volume = build_norm_correlation_volume(match_left, match_right, self.maxdisp//4)
+        # print("corr_volume : ",corr_volume.size())
         corr_volume = self.corr_stem(corr_volume)
+        # print("corr_volume : ",corr_volume.size())
         feat_volume = self.semantic(features_left[0]).unsqueeze(2)
 
+        # print("corr_volume: ",corr_volume.size())
+        # print("feat volume: ",feat_volume.size())
         volume = self.agg(feat_volume * corr_volume)
         # print("volume: ",volume.size())
         cost,conv8= self.hourglass_fusion(volume, features_left)
-        # print("match _left : ",match_left.size())
+        # print("volume: ",volume.size())
 
         xspx = self.spx_4(features_left[0])
+        # print("xspx:",xspx.size())
         xspx = self.spx_2(xspx, stem_2x)
         spx_pred = self.spx(xspx)
         spx_pred = F.softmax(spx_pred, 1)
@@ -353,9 +364,7 @@ class CGI_Stereo(nn.Module):
 
 
         if self.training:
-            # changing to output feature map 1/4,cost volume, 1/8 & 1/4 of deeconv
-            # Commenting out before focusing on features for cfnet
-            # features_left[0],volume,cost,conv8
+            # outputting left and right features , but not used for training
             return [pred_up*4, pred.squeeze(1)*4],ll,rl
 
         else:

@@ -79,7 +79,6 @@ class Conv2x(nn.Module):
         x = self.conv2(x)
         return x
 
-
 def disparity_regression(x, maxdisp):
     assert len(x.shape) == 4
     disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
@@ -220,12 +219,30 @@ def context_upsample(depth_low, up_weights):
 def regression_topk(cost, disparity_samples, k):
 
     _, ind = cost.sort(1, True)
+
     pool_ind = ind[:, :k]
     cost = torch.gather(cost, 1, pool_ind)
     prob = F.softmax(cost, 1)
     disparity_samples = torch.gather(disparity_samples, 1, pool_ind)    
     pred = torch.sum(disparity_samples * prob, dim=1, keepdim=True)
-    return pred
+    
+    # outputting probability for the umap construction
+    return pred,prob
     
 
 
+
+# For uncertainty map calculation
+def disparity_variance(x, maxdisp, disparity):
+    # the shape of disparity should be B,1,H,W, return is the variance of the cost volume [B,1,H,W]
+    assert len(x.shape) == 4
+    disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
+    disp_values = disp_values.view(1, maxdisp, 1, 1)
+
+    # Unsqueeze to match the disparity size
+    # disparity = disparity.unsqueeze(1) 
+    # print("x: ",x.size())
+    # print("disp values: ",disp_values.size())
+    # print("disparity values: ",disparity.size())
+    disp_values = (disp_values - disparity) ** 2
+    return torch.sum(x * disp_values, 1, keepdim=True)

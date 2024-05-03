@@ -42,7 +42,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -203,7 +203,8 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_lfeat,s_rfeat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
+    disp_ests,s_lfeat,s_rfeat = model(imgL, imgR)
+    #,s_cvolume,s_conv4,s_conv8
     # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
     # sl_feat, sr_feat [1/4,1/8,1/16,1/32]
@@ -219,6 +220,7 @@ def train_sample(sample, compute_metrics=False):
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     # t_umap full sized
+    print("t_umap size: ",t_umap.size())
 
     # channel numbers
     # student_channels = s_feat.size()[1]
