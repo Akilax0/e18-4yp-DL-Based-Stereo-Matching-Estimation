@@ -31,7 +31,7 @@ from datasets import __datasets__
 # # 
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 
-
+from ranking_loss import *
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 from models_cf import __t_models__, model_loss 
 
@@ -227,14 +227,14 @@ def train_sample(sample, compute_metrics=False):
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/32
     
+    # for i in range(len(t_down_umaps)):
+    #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
+
     s_down_umaps = []
     s_down_umaps.append(s_umaps[-1]) #1/4
     s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
     s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
     s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/132
-    
-    # for i in range(len(t_down_umaps)):
-    #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
 
     '''
     Features from student as s_ll,s_rl
@@ -281,7 +281,7 @@ def train_sample(sample, compute_metrics=False):
     lambda_feat = 0.001
     lambda_cvolume = 0 
     lambda_conv4 = 0 
-    lambda_conv8 = 0 
+    lambda_conv8 = 0
     lambda_logit = 0.001
     
     # using default value
@@ -290,8 +290,6 @@ def train_sample(sample, compute_metrics=False):
     # semantic = 0.75
     # detection / instance - 0.45
     lambda_mgd = 0.5
-
-    # Generated maps from student
 
     feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0])  
     feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
@@ -308,17 +306,21 @@ def train_sample(sample, compute_metrics=False):
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
-    
-    # print("disp_ests: ",disp_ests[0].size())
-    # print("teacher pred: ",t_pred1_s2[0].size())
+
     sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
     sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
-    # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
+    logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
         lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + logit_loss * lambda_logit
-        
+
+    # print("feature loss ",feat_loss)
+    # print("cvolume loss ",cvolume_loss)
+    # print("conv4 loss ",conv4_loss)
+    # print("conv8 loss ",conv8_loss)
+    # print("loss",loss)
+
     loss = loss + kd_loss
     # print("loss sum ",loss)
     
@@ -421,9 +423,10 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         mi = mask.min()
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
-        # for student mask have to mask the certain positions
-        # print("matrix: ", mask)
-        # print("ma, mi:" , ma,mi)
+        # Expand mask here 
+        mat = random_masking(mat)
+        
+        # print("mask comparison: ",mat.size(),mat1.size())
 
 
 
@@ -480,6 +483,48 @@ def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_
     # print("dis_loss : " ,dis_loss)
 
     return dis_loss
+
+def random_masking(mask):
+    # The fuinction adds same number of random points as 
+    # the number of uncertainty points
+    
+    #Currnetly uncertainty mask is created by the teacher. 
+    # And what we do is mask the sections that the TEACHER is 
+    # uncertain about. 
+    # So we have a lot of 1s in the mask -> diistillation pixels
+    # and only a few pixels that are masked.
+    
+    # Now we are increasing the 0s locations in this function
+
+    # print("mask input size : ",mask.size())
+    # print("mask: ",mask)
+    mask_1_loc = mask.nonzero() 
+    # print("number of uncertainty points: ",mask_1_loc.size())
+    
+    mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
+    # print("mask  0 locations: ",mask_0_loc)
+    
+    random_indices = torch.randperm(len(mask_1_loc))[:mask_0_loc]
+
+    selected_tensors = [mask_1_loc[i] for i in random_indices]
+        
+    # print("num of selected tensors: ",len(selected_tensors))    
+    
+    # for i in selected_tensors:
+    #     print("sele tensor : ", i)
+
+    selected_tensors = torch.stack(selected_tensors,dim=0)
+
+    # print("location tensors: ",selected_tensors.size())
+    # row , col = selected_tensors[:,2],selected_tensors[:,3]
+
+    # mask[0,0,row,col] = 0 
+    mask[selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2],selected_tensors[:,3]] = 0 
+    # print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
+
+    # print("mask: ",mask)
+    return mask
+
 
 if __name__ == '__main__':
     train()

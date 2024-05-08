@@ -203,7 +203,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl,_,_,_ = model(imgL, imgR)
+    disp_ests,s_ll,s_rl,_,_,_,s_umaps = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -229,6 +229,12 @@ def train_sample(sample, compute_metrics=False):
     
     # for i in range(len(t_down_umaps)):
     #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
+
+    s_down_umaps = []
+    s_down_umaps.append(s_umaps[-1]) #1/4
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/132
 
     '''
     Features from student as s_ll,s_rl
@@ -283,16 +289,16 @@ def train_sample(sample, compute_metrics=False):
     # detection / instance - 0.45
     lambda_mgd = 0.5
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[3])  
     
 
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1] )  
-    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0] )  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[3])  
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
@@ -485,12 +491,11 @@ def random_masking(mask):
     # Now we are increasing the 0s locations in this function
 
     print("mask input size : ",mask.size())
-    # print("mask: ",mask)
+    print("mask: ",mask)
     mask_1_loc = mask.nonzero() 
-    # print("number of uncertainty points: ",mask_1_loc.size())
     
     mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
-    # print("mask  0 locations: ",mask_0_loc)
+    print("number of uncertain points: ",mask_0_loc)
     
     random_indices = torch.randperm(len(mask_1_loc))[:mask_0_loc]
 
@@ -508,9 +513,9 @@ def random_masking(mask):
 
     # mask[0,0,row,col] = 0 
     mask[selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2],selected_tensors[:,3]] = 0 
-    # print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
+    print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
 
-    # print("mask: ",mask)
+    print("updated mask: ",mask)
     return mask
 
 
