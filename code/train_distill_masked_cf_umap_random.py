@@ -203,7 +203,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl = model(imgL, imgR)
+    disp_ests,s_ll,s_rl,_,_,_,s_umaps = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -229,6 +229,11 @@ def train_sample(sample, compute_metrics=False):
     
     # for i in range(len(t_down_umaps)):
     #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
+    s_down_umaps = []
+    s_down_umaps.append(s_umaps[-1]) #1/4
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
+    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/132
 
     '''
     Features from student as s_ll,s_rl
@@ -270,11 +275,13 @@ def train_sample(sample, compute_metrics=False):
     cvolume_loss = 0
     conv4_loss = 0 
     conv8_loss = 0
+    logit_loss = 0
     
     lambda_feat = 0.001
     lambda_cvolume = 0 
     lambda_conv4 = 0 
     lambda_conv8 = 0 
+    lambda_logit = 0.001
     
     # using default value
     # change according to usecase
@@ -283,25 +290,30 @@ def train_sample(sample, compute_metrics=False):
     # detection / instance - 0.45
     lambda_mgd = 0.5
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[3])  
     
 
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1] )  
-    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0] )  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[2])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[3])  
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
+    
+    sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
+    sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
+
+    logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
-        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss
+        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + lambda_logit * logit_loss
 
     # print("feature loss ",feat_loss)
     # print("cvolume loss ",cvolume_loss)
