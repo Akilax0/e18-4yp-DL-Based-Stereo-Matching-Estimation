@@ -229,11 +229,6 @@ def train_sample(sample, compute_metrics=False):
     
     # for i in range(len(t_down_umaps)):
     #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
-    s_down_umaps = []
-    s_down_umaps.append(s_umaps[-1]) #1/4
-    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
-    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
-    s_down_umaps.append(F.interpolate(s_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/132
 
     s_down_umaps = []
     s_down_umaps.append(s_umaps[-1]) #1/4
@@ -286,7 +281,7 @@ def train_sample(sample, compute_metrics=False):
     lambda_feat = 0.001
     lambda_cvolume = 0 
     lambda_conv4 = 0 
-    lambda_conv8 = 0 
+    lambda_conv8 = 0
     lambda_logit = 0.001
     
     # using default value
@@ -312,14 +307,13 @@ def train_sample(sample, compute_metrics=False):
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
-    
     sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
     sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
     logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
-        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + lambda_logit * logit_loss
+        lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + logit_loss * lambda_logit
 
     # print("feature loss ",feat_loss)
     # print("cvolume loss ",cvolume_loss)
@@ -505,8 +499,10 @@ def random_masking(mask):
     # print("mask input size : ",mask.size())
     # print("mask: ",mask)
     mask_1_loc = mask.nonzero() 
+    # print("number of uncertainty points: ",mask_1_loc.size())
     
     mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
+    # print("mask  0 locations: ",mask_0_loc)
     
     random_indices = torch.randperm(len(mask_1_loc))[:mask_0_loc]
 
@@ -524,9 +520,9 @@ def random_masking(mask):
 
     # mask[0,0,row,col] = 0 
     mask[selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2],selected_tensors[:,3]] = 0 
-    print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
+    # print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
 
-    print("updated mask: ",mask)
+    # print("mask: ",mask)
     return mask
 
 

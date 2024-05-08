@@ -314,7 +314,7 @@ def train_sample(sample, compute_metrics=False):
     sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
     sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
-    logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
+    # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
         lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + logit_loss * lambda_logit
