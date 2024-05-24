@@ -3,6 +3,6 @@ from .loss import model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss
 # from .autoencoder import dec
 # from .mgd import MGDLoss
 
-__models__ = {
+__t_models__ = {
     "CGI_Stereo": CGI_Stereo   
 }

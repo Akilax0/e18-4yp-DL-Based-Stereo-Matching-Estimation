@@ -601,7 +601,6 @@ class cfnet(nn.Module):
         mindisparity_s2 = F.upsample(mindisparity_s2 * 2, [left.size()[2] // 2, left.size()[3] // 2], mode='bilinear',
                                      align_corners=True)
 
-
         mindisparity_s2_1, maxdisparity_s2_1 = self.generate_search_range(self.sample_count_s2 + 1, mindisparity_s2, maxdisparity_s2, scale = 1)
         disparity_samples_s2 = self.generate_disparity_samples(mindisparity_s2_1, maxdisparity_s2_1, self.sample_count_s2).float()
         confidence_v_concat_s2, _ = self.cost_volume_generator(features_left["concat_feature2"],
@@ -623,7 +622,6 @@ class cfnet(nn.Module):
         cost1_s2 = self.confidence_classif1_s2(out2_s2).squeeze(1)
         cost1_s2_possibility = F.softmax(cost1_s2, dim=1)
         pred1_s2 = torch.sum(cost1_s2_possibility * disparity_samples_s2, dim=1, keepdim=True)
-
 
         # Is this the uncertainty estimation we need?
 

@@ -307,10 +307,10 @@ def train_sample(sample, compute_metrics=False):
     # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
     # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
-    sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
-    sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
+    # sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
+    # sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
-    logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
+    # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
         lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + logit_loss * lambda_logit
@@ -416,7 +416,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.5
+    thresh = 0.25
 
     if mask is not None:
         ma = mask.max()
@@ -424,7 +424,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
         # Expand mask here 
-        mat = random_masking(mat)
+        # mat = random_masking(mat)
         
         # print("mask comparison: ",mat.size(),mat1.size())
 
@@ -498,31 +498,37 @@ def random_masking(mask):
 
     # print("mask input size : ",mask.size())
     # print("mask: ",mask)
-    mask_1_loc = mask.nonzero() 
-    # print("number of uncertainty points: ",mask_1_loc.size())
-    
-    mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
-    # print("mask  0 locations: ",mask_0_loc)
-    
-    random_indices = torch.randperm(len(mask_1_loc))[:mask_0_loc]
+    # mask_1_loc = mask.nonzero() 
 
-    selected_tensors = [mask_1_loc[i] for i in random_indices]
-        
-    # print("num of selected tensors: ",len(selected_tensors))    
+    zeros_count = torch.sum(mask == 0, dim=(2,3))
+    # print("number of unmaksked points: ",zeros_count, zeros_count[0])
     
+    for i in range(mask.size()[0]): 
+        if(zeros_count[i] !=0):
+            non_zero_loctions = torch.nonzero(mask[i,:,:,:])
+            random_indices = torch.randperm(len(non_zero_loctions))[:zeros_count[i]]
+            # print("random indices: ",random_indices.size())
+            selected_tensors = [non_zero_loctions[i] for i in random_indices]
+            # print("selected tensors: ",selected_tensors.size())
+            selected_tensors = torch.stack(selected_tensors,dim=0)
+            # print("selected tensors: ",selected_tensors.size())
+            # print("selected tensors: ",selected_tensors.size())
+            mask[i,selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2]] = 0 
+
+    # mask_0_loc = mask.size()[0]*mask.size()[2]*mask.size()[3] - mask_1_loc.size()[0]
+    # print("mask  0 locations: ",mask_0_loc)
+    # print("num of selected tensors: ",len(selected_tensors))    
     # for i in selected_tensors:
     #     print("sele tensor : ", i)
 
-    selected_tensors = torch.stack(selected_tensors,dim=0)
-
     # print("location tensors: ",selected_tensors.size())
     # row , col = selected_tensors[:,2],selected_tensors[:,3]
-
     # mask[0,0,row,col] = 0 
-    mask[selected_tensors[:,0],selected_tensors[:,1],selected_tensors[:,2],selected_tensors[:,3]] = 0 
     # print("zero locations: ", (mask.size()[0]*mask.size()[2]*mask.size()[3]) - mask.nonzero().size()[0] )
 
     # print("mask: ",mask)
+    zeros_count = torch.sum(mask == 0, dim=(2,3))
+    # print("number of unmaksked after points: ",zeros_count)
     return mask
 
 

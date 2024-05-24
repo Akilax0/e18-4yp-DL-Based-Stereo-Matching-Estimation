@@ -311,8 +311,8 @@ def train_sample(sample, compute_metrics=False):
     
     # print("disp_ests: ",disp_ests[0].size())
     # print("teacher pred: ",t_pred1_s2[0].size())
-    sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
-    sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
+    # sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
+    # sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
     # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
 
@@ -414,7 +414,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.5
+    thresh = 0.25
 
     if mask is not None:
         ma = mask.max()

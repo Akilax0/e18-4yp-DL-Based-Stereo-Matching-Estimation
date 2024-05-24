@@ -28,7 +28,9 @@ from datasets import __datasets__
 
 # # 
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
-from models_cgi_resnet import __t_models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+# from models_cgi_resnet_full import __t_models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
+
+from models_cgi_resnet_full_rec import __t_models__, model_loss_train, model_loss_test
 
 
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
@@ -40,13 +42,13 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
 # Additional Args
-parser.add_argument('--t_model', default='CGI_Stereo', help='select a teacher model structure', choices=__models__.keys())
-parser.add_argument('--t_loadckpt', default='./checkpoints/cgi_resnet/second/checkpoint_000019.ckpt', help='load the weights from pretrained teacher')
+parser.add_argument('--t_model', default='CGI_Stereo', help='select a teacher model structure', choices=__t_models__.keys())
+parser.add_argument('--t_loadckpt', default='./checkpoints/cgi_resnet_full/second/checkpoint_000018.ckpt', help='load the weights from pretrained teacher')
 
 parser.add_argument('--model', default='CGI_Stereo', help='select a student model structure', choices=__models__.keys())
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
@@ -96,7 +98,7 @@ model = nn.DataParallel(model)
 model.cuda()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))
 
-#TEACHER CFNET
+#TEACHER RESNET
 # model, optimizer
 t_model = __t_models__[args.t_model](args.maxdisp)
 t_model = nn.DataParallel(t_model)
@@ -194,6 +196,8 @@ def train():
 
 # train one sample
 def train_sample(sample, compute_metrics=False):
+
+
     model.train()
     imgL, imgR, disp_gt, disp_gt_low = sample['left'], sample['right'], sample['disparity'], sample['disparity_low']
     imgL = imgL.cuda()
@@ -202,7 +206,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_ll,s_rl = model(imgL, imgR)
+    disp_ests,s_ll,s_rl,_,_,_,_ = model(imgL, imgR)
 
     with torch.no_grad():
         # evaluate mode on teacher
@@ -212,11 +216,12 @@ def train_sample(sample, compute_metrics=False):
         t_disp_ests,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
         # tumap size 1/4
 
+
     # for i in range(len(t_ll)):
-    #     print("Teacher left: ",i,t_ll[i].size())
+    #     print("Teacher left: ",i,t_ll[i].size(), t_ll[i].get_device())
     # for i in range(len(s_ll)):
-    #     print("Student left: ",i,s_ll[i].size())
-    # print("Umap: ",t_umaps.size())
+    #     print("Student left: ",i,s_ll[i].size(),s_ll[i].get_device())
+    # print("Umap: ",t_umaps[0].size(),t_umaps[0].type())
 
     # introducing CFNet
     # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
@@ -224,13 +229,15 @@ def train_sample(sample, compute_metrics=False):
     # print("umaps 1/8 output ",t_umaps[0].min() , t_umaps[0].max())
     # print("umaps 1/4 output ",t_umaps[1].min() , t_umaps[1].max())
     # print("umaps 1/2 output ",t_umaps[2].min() , t_umaps[2].max())
-    
 
+    # print("tumaps: ",t_umaps[-1].size(),len(t_umaps)) 
     t_down_umaps = []
-    t_down_umaps.append(t_umaps[-1]) #1/4
+    t_down_umaps.append(t_umaps[-1]) #1/4_
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/32
+    
+
     
     # for i in range(len(t_down_umaps)):
     #     print(" downsampled map index, size ",i,t_down_umaps[i].size())
@@ -389,10 +396,14 @@ def align(student,student_channels,teacher_channels):
 
 def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None):
 
+    st = time.time()
+    print("time mid H: ",time.time()-st)
 
     N, C, H, W = preds_T.shape
+    print("time mid H: ",time.time()-st, H)
 
     device = preds_S.device
+    print("time mid H: ",time.time()-st, H)
     
     # print("device: " ,device)
 
@@ -402,12 +413,17 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
             nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
+    print("time mid H: ",time.time()-st, H)
     mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
+    print("time mid H: ",time.time()-st, H)
 
     # mask generation
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
+    
+    # print("time mid: ",time.time()-st)
+    print("time mid H: ",time.time()-st, H)
 
     # threshold for umaps
     thresh = 0.5
@@ -418,21 +434,28 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
 
+    print("time mid H: ",time.time()-st, H)
 
 
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
     # print("masked_feat: " ,masked_feat.size())
+    print("time mid H: ",time.time()-st, H)
     
+    # print("time mid: ",time.time()-st)
     # Genearate feature from student to be compared with teacher
     new_feat = generation(masked_feat)
     # print("New feat: " ,new_feat.size())
+    # print("time mid: ",time.time()-st)
+    print("time mid H: ",time.time()-st, H)
 
     # calculate distilation loss
     # check the implementation here for distillation loss
     # dis_loss = loss_mse(new_feat, preds_T)/N
     dis_loss = F.mse_loss(new_feat,preds_T)
     # print("dis_loss : " ,dis_loss.size())
+    # print("time mid: ",time.time()-st)
+    print("time mid H: ",time.time()-st, H)
 
     return dis_loss
 
