@@ -50,6 +50,10 @@ import cv2
 from models import __models__
 # from models_acv import __t_models__
 # from models_cgi_resnet_full_rec import __models__
+# from models_cgi_resnet50 import __models__
+
+
+# from models_igev.core.igev_stereo import IGEVStereo
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -82,6 +86,8 @@ def kitti(v,loadckpt):
 
     model = __models__[args.model](maxdisp)
     model = nn.DataParallel(model)
+    # model = nn.DataParallel(IGEVStereo(args))
+
     model.cuda()
     model.eval()
 
@@ -154,6 +160,7 @@ def mid(loadckpt):
 
 
     train_limg, train_rimg, train_gt, test_limg, test_rimg = mb.mb_loader(datapath, res=resolution)
+
     model = __models__[args.model](maxdisp)
     model = nn.DataParallel(model)
     model.cuda()

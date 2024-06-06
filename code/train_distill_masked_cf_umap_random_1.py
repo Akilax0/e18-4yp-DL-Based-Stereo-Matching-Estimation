@@ -35,6 +35,7 @@ from ranking_loss import *
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 from models_cf import __t_models__, model_loss 
 
+
 from utils import *
 from torch.utils.data import DataLoader
 import gc
@@ -289,7 +290,7 @@ def train_sample(sample, compute_metrics=False):
     # classificatio = 0.5
     # semantic = 0.75
     # detection / instance - 0.45
-    lambda_mgd = 0.5
+    lambda_mgd = 0.75
 
     feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[0])  
     feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = s_down_umaps[1])  
@@ -416,13 +417,13 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.25
+    thresh = 0.75
 
-    if mask is not None:
-        ma = mask.max()
-        mi = mask.min()
-        thr = mi + (ma-mi) * thresh
-        mat  = torch.where(mask > thr, 0, 1).to(device)
+    # if mask is not None:
+    #     ma = mask.max()
+    #     mi = mask.min()
+    #     thr = mi + (ma-mi) * thresh
+    #     mat  = torch.where(mask > thr, 0, 1).to(device)
         # Expand mask here 
         # mat = random_masking(mat)
         

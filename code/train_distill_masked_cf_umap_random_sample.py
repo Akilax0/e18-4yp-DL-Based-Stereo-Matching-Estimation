@@ -45,7 +45,7 @@ import cv2
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -144,6 +144,40 @@ print("start at epoch {}".format(start_epoch))
 def train():
     bestepoch = 0
     error = 100
+    
+    l1 = 128
+    l2 = 192
+    l3 = 256
+    l4 = 512
+    gen1 = None
+    gen2 = None
+    gen3 = None
+    gen4 = None
+    device = 1 #int(os.environ['CUDA_VISIBLE_DEVICES'])
+
+    # generation = nn.Sequential(
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+
+
+    # gen1 = nn.Sequential(
+    #         nn.Conv2d(l1, l1, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(l1, l1, kernel_size=3, padding=1)).to(device)
+    # gen2 = nn.Sequential(
+    #         nn.Conv2d(l2, l2, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(l2, l2, kernel_size=3, padding=1)).to(device)
+    # gen3 = nn.Sequential(
+    #         nn.Conv2d(l3, l3, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(l3, l3, kernel_size=3, padding=1)).to(device)
+    # gen4 = nn.Sequential(
+    #         nn.Conv2d(l4, l4, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(l4, l4, kernel_size=3, padding=1)).to(device)
+
     for epoch_idx in range(start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch_idx, args.lr, args.lrepochs)
 
@@ -152,7 +186,7 @@ def train():
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             start_time = time.time()
             do_summary = global_step % args.summary_freq == 0
-            loss, scalar_outputs = train_sample(sample, compute_metrics=do_summary)
+            loss, scalar_outputs = train_sample(sample,gen1,gen2,gen3,gen4,compute_metrics=do_summary)
             if do_summary:
                 save_scalars(logger, 'train', scalar_outputs, global_step)
                 # save_images(logger, 'train', image_outputs, global_step)
@@ -198,7 +232,7 @@ def train():
 
 
 # train one sample
-def train_sample(sample, compute_metrics=False):
+def train_sample(sample,gen1,gen2,gen3,gen4,compute_metrics=False):
     model.train()
     imgL, imgR, disp_gt, disp_gt_low = sample['left'], sample['right'], sample['disparity'], sample['disparity_low']
     imgL = imgL.cuda()
@@ -222,6 +256,9 @@ def train_sample(sample, compute_metrics=False):
     # print("umaps 1/8 output ",t_umaps[0].min() , t_umaps[0].max())
     # print("umaps 1/4 output ",t_umaps[1].min() , t_umaps[1].max())
     # print("umaps 1/2 output ",t_umaps[2].min() , t_umaps[2].max())
+    
+    # for i in range(len(t_ll)):
+    #     print("Teacher channel: ",t_ll[i].size()[1])
     
 
     t_down_umaps = []
@@ -297,16 +334,16 @@ def train_sample(sample, compute_metrics=False):
     # detection / instance - 0.45
     lambda_mgd = 0.5
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[1],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen1)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[2],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen2)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[3],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[4],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4], generation = gen4)  
     
 
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1] )  
-    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[1],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen1)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[2],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen2)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[3],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[4],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[4].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[4], generation = gen4)  
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
@@ -399,7 +436,7 @@ def align(student,student_channels,teacher_channels):
 
     return m(student)
 
-def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None):
+def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None,generation=None):
 
 
     N, C, H, W = preds_T.shape
@@ -443,13 +480,13 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         elif(a==2):
             d = 1
         elif(a==1):
-            # save_image(mat[0].float(),'test_umap_4.png')
+            save_image(mat[0].float(),'test_umap_4.png')
             d = 2
 
         # print("mask before: ",mat)
         # Sampling as per
         # SMD-Nets: Stereo Mixture Density Networks
-        mat1 = sampling(mat,d)
+        mat1 = sampling(mat,d,a)
         
         # print("mask comparison: ",mat.size(),mat1.size())
         # print("mask after: ",mat1)
@@ -480,11 +517,11 @@ def get_dis_loss_3D(preds_S, preds_T,student_channels, teacher_channels, lambda_
     device = preds_S.device
     
     # print("device: " ,device)
+    # generation = nn.Sequential(
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
-    generation = nn.Sequential(
-            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True), 
-            nn.Conv3d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
     mat = torch.rand((N,1,D,H,W)).to(device) 
@@ -560,7 +597,7 @@ def random_masking(mask):
     return mask
 
 
-def sampling(mat,dilation_factor=10):
+def sampling(mat,dilation_factor=10,a=4):
     # New sampling strategy too use 
     # N/2 from dilated uncertainty map 
     # N/2 from random 
@@ -570,17 +607,23 @@ def sampling(mat,dilation_factor=10):
     # print("uncertainty map: ",mat.size())
     # print(" map: ",mat)
 
+    # save_image(mat1.float(),'test_img_'+str(a)+'.png')
     # dilation_factor = 1
-    edges = get_boundaries(mat, dilation_factor)
+
+    if dilation_factor == 0:
+        edges = mat.float()
+    else:
+        edges = get_boundaries(mat, dilation_factor)
+        
+    img1 = edges[0]
     
     # print("edges: ",edges.size())
     # print("edges data: ",edges)
 
-    img1 = edges[0]
     # print("image size : ", img1.size())
     # img1 = img1.cpu().numpy()
     # print("img size: ",img1.shape)
-    save_image(img1,'test_img_'+str(dilation_factor)+'.png')
+    save_image(img1,'test_img_'+str(a)+'.png')
 
     # Number of zeros from uncertainty map
     zeros_count = torch.sum(mat == 0, dim=(2,3))
@@ -676,6 +719,8 @@ def get_boundaries(disp, th=1., dilation=10):
     # edges_x = torch.logical_or(F.pad(torch.abs(disp[:, 1:] - disp[:, :-1]) > th, ((0, 0), (1, 0))),
     #                         F.pad(torch.abs(disp[:, :-1] - disp[:,1:]) > th, ((0, 0), (0, 1))))
     # edges = torch.logical_or(edges_y,  edges_x).astype(torch.float32)
+
+    edges = disp.float()
 
     if dilation > 0:
         kernel_size = (dilation, dilation)

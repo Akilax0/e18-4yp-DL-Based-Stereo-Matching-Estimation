@@ -17,7 +17,8 @@ from datasets import __datasets__
 
 # from models import __models__, model_loss_train, model_loss_test
 # from models_cgi_resnet import __models__, model_loss_train, model_loss_test
-from models_cgi_resnet_full import __models__, model_loss_train, model_loss_test
+# from models_cgi_resnet_full import __models__, model_loss_train, model_loss_test
+from models_cgi_resnet50 import __models__, model_loss_train, model_loss_test
 
 
 from utils import *
@@ -26,7 +27,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
 parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__models__.keys())
@@ -170,7 +171,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,_,_= model(imgL, imgR)
+    disp_ests = model(imgL, imgR)
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]

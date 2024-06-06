@@ -30,7 +30,9 @@ from datasets import __datasets__
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 # from models_cgi_resnet_full import __t_models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 
+# resnet 152 without increased
 from models_cgi_resnet_full_rec import __t_models__, model_loss_train, model_loss_test
+# from models_cgi_resnet50 import __t_models__, model_loss_train, model_loss_test
 
 
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
@@ -42,7 +44,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -141,6 +143,22 @@ print("start at epoch {}".format(start_epoch))
 def train():
     bestepoch = 0
     error = 100
+
+    device = 0
+
+    gen1 = nn.Sequential(
+            nn.Conv2d(560,560, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv2d(560,560, kernel_size=3, padding=1)).to(device)
+    gen2 = nn.Sequential(
+            nn.Conv2d(1024,1024, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv2d(1024,1024, kernel_size=3, padding=1)).to(device)
+    gen3 = nn.Sequential(
+            nn.Conv2d(2048, 2048, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True), 
+            nn.Conv2d(2048,2048, kernel_size=3, padding=1)).to(device)
+
     for epoch_idx in range(start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch_idx, args.lr, args.lrepochs)
 
@@ -149,7 +167,7 @@ def train():
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             start_time = time.time()
             do_summary = global_step % args.summary_freq == 0
-            loss, scalar_outputs = train_sample(sample, compute_metrics=do_summary)
+            loss, scalar_outputs = train_sample(sample,gen1,gen2,gen3,compute_metrics=do_summary)
             if do_summary:
                 save_scalars(logger, 'train', scalar_outputs, global_step)
                 # save_images(logger, 'train', image_outputs, global_step)
@@ -195,7 +213,7 @@ def train():
 
 
 # train one sample
-def train_sample(sample, compute_metrics=False):
+def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
 
 
     model.train()
@@ -208,6 +226,7 @@ def train_sample(sample, compute_metrics=False):
 
     disp_ests,s_ll,s_rl,_,_,_,_ = model(imgL, imgR)
 
+
     with torch.no_grad():
         # evaluate mode on teacher
         t_model.eval()
@@ -216,6 +235,24 @@ def train_sample(sample, compute_metrics=False):
         t_disp_ests,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
         # tumap size 1/4
 
+    # device = t_ll[0].get_device()
+
+    # gen1 = nn.Sequential(
+    #         nn.Conv2d(t_ll[0].size()[1], t_ll[0].size()[1], kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(t_ll[0].size()[1], t_ll[0].size()[1], kernel_size=3, padding=1)).to(device)
+    # gen2 = nn.Sequential(
+    #         nn.Conv2d(t_ll[1].size()[1], t_ll[1].size()[1], kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(t_ll[1].size()[1], t_ll[1].size()[1], kernel_size=3, padding=1)).to(device)
+    # gen3 = nn.Sequential(
+    #         nn.Conv2d(t_ll[2].size()[1], t_ll[2].size()[1], kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(t_ll[2].size()[1], t_ll[2].size()[1], kernel_size=3, padding=1)).to(device)
+    # gen4 = nn.Sequential(
+    #         nn.Conv2d(t_ll[3].size()[1], t_ll[3].size()[1], kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(t_ll[3].size()[1], t_ll[3].size()[1], kernel_size=3, padding=1)).to(device)
 
     # for i in range(len(t_ll)):
     #     print("Teacher left: ",i,t_ll[i].size(), t_ll[i].get_device())
@@ -293,19 +330,20 @@ def train_sample(sample, compute_metrics=False):
     # classificatio = 0.5
     # semantic = 0.75
     # detection / instance - 0.45
-    lambda_mgd = 0.5
+    lambda_mgd = 0.75
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[1],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[2],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[3],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[1],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen2)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[2],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[3],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
 
     
 
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[1],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[2],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2])  
-    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[3],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3])  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[1],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen2)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[2],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[3],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
+
 
     # cvolume_loss = KD_cvolume_loss(student=s_cvolume,teacher=t_cvolume) 
     # cvolume_loss = get_dis_loss_3D(preds_S=s_cvolume,preds_T=t_cvolume,student_channels=s_cvolume.size()[1],teacher_channels=t_cvolume.size()[1],lambda_mgd=lambda_mgd) 
@@ -340,6 +378,7 @@ def train_sample(sample, compute_metrics=False):
             # scalar_outputs["Thres3"] = [Thres_metric(disp_est, disp_gt, mask, 3.0) for disp_est in disp_ests_final]
     loss.backward()
     optimizer.step()
+
 
     # Add knoledge distillation error here
     return tensor2float(loss), tensor2float(scalar_outputs)
@@ -394,68 +433,54 @@ def align(student,student_channels,teacher_channels):
 
     return m(student)
 
-def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None):
-
-    st = time.time()
-    print("time mid H: ",time.time()-st)
-
+def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None, generation=None):
+    
     N, C, H, W = preds_T.shape
-    print("time mid H: ",time.time()-st, H)
 
     device = preds_S.device
-    print("time mid H: ",time.time()-st, H)
     
     # print("device: " ,device)
 
-    generation = nn.Sequential(
-            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True), 
-            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
+    # generation = nn.Sequential(
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    print("time mid H: ",time.time()-st, H)
+
     mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
-    print("time mid H: ",time.time()-st, H)
 
     # mask generation
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
     
-    # print("time mid: ",time.time()-st)
-    print("time mid H: ",time.time()-st, H)
 
     # threshold for umaps
     thresh = 0.5
 
-    if mask is not None:
-        ma = mask.max()
-        mi = mask.min()
-        thr = mi + (ma-mi) * thresh
-        mat  = torch.where(mask > thr, 0, 1).to(device)
+    # if mask is not None:
+    #     ma = mask.max()
+    #     mi = mask.min()
+    #     thr = mi + (ma-mi) * thresh
+    #     mat  = torch.where(mask > thr, 0, 1).to(device)
 
-    print("time mid H: ",time.time()-st, H)
 
 
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
     # print("masked_feat: " ,masked_feat.size())
-    print("time mid H: ",time.time()-st, H)
+
     
-    # print("time mid: ",time.time()-st)
     # Genearate feature from student to be compared with teacher
     new_feat = generation(masked_feat)
     # print("New feat: " ,new_feat.size())
-    # print("time mid: ",time.time()-st)
-    print("time mid H: ",time.time()-st, H)
 
     # calculate distilation loss
     # check the implementation here for distillation loss
     # dis_loss = loss_mse(new_feat, preds_T)/N
     dis_loss = F.mse_loss(new_feat,preds_T)
     # print("dis_loss : " ,dis_loss.size())
-    # print("time mid: ",time.time()-st)
-    print("time mid H: ",time.time()-st, H)
 
     return dis_loss
 
