@@ -35,13 +35,14 @@ from ranking_loss import *
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
 from models_cf import __t_models__, model_loss 
 
+from torchvision.utils import save_image
 from utils import *
 from torch.utils.data import DataLoader
 import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -140,6 +141,7 @@ print("start at epoch {}".format(start_epoch))
 def train():
     bestepoch = 0
     error = 100
+    st = time.time()
     for epoch_idx in range(start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch_idx, args.lr, args.lrepochs)
 
@@ -148,7 +150,7 @@ def train():
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             start_time = time.time()
             do_summary = global_step % args.summary_freq == 0
-            loss, scalar_outputs = train_sample(sample, compute_metrics=do_summary)
+            loss, scalar_outputs = train_sample(sample,epoch_idx,st, compute_metrics=do_summary)
             if do_summary:
                 save_scalars(logger, 'train', scalar_outputs, global_step)
                 # save_images(logger, 'train', image_outputs, global_step)
@@ -194,7 +196,7 @@ def train():
 
 
 # train one sample
-def train_sample(sample, compute_metrics=False):
+def train_sample(sample,epoch,st, compute_metrics=False):
     model.train()
     imgL, imgR, disp_gt, disp_gt_low = sample['left'], sample['right'], sample['disparity'], sample['disparity_low']
     imgL = imgL.cuda()
@@ -219,6 +221,9 @@ def train_sample(sample, compute_metrics=False):
     # print("umaps 1/4 output ",t_umaps[1].min() , t_umaps[1].max())
     # print("umaps 1/2 output ",t_umaps[2].min() , t_umaps[2].max())
     
+    # save umaps for comparison
+    for i in range(len(t_umaps)):
+        save_image(t_umaps[i].float(),'cfnet_umaps/'+str(i)+'_test_umap.png')
 
     t_down_umaps = []
     t_down_umaps.append(t_umaps[-1]) #1/2
@@ -420,7 +425,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.50
+    thresh = 0.25
 
     if mask is not None:
         ma = mask.max()
@@ -444,8 +449,8 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # calculate distilation loss
     # check the implementation here for distillation loss
 
-    # dis_loss = F.mse_loss(new_feat,preds_T)
-    dis_loss = F.smooth_l1_loss(new_feat,preds_T)
+    dis_loss = F.mse_loss(new_feat,preds_T)
+    # dis_loss = F.smooth_l1_loss(new_feat,preds_T)
 
     return dis_loss
 

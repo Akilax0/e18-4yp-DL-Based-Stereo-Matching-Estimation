@@ -399,14 +399,22 @@ class CGI_Stereo(nn.Module):
         pred_up = context_upsample(pred, spx_pred)
         # print("pred up: ",pred_up.size())
 
+
+        pred2_s4 = disparity_regression(prob,self.maxdisp//4).unsqueeze(1)
+        pred2_cur = pred2_s4.detach()
+
+        umaps = []
+        umaps.append(pred2_s4)
+
         # Calculting umap
-        pred2_cur = pred.detach()
         # Please check this i think this is wrong
         # pred2_umap = disparity_variance_confidence(prob, self.maxdisp//4, pred2_cur)
         pred2_umap = disparity_variance(prob, self.maxdisp//4, pred2_cur)
+        
+        umaps.append(pred2_umap)
 
         if self.training:
             # outputting left and right features , but not used for training
             return [pred_up*4, pred.squeeze(1)*4]
         else:
-            return [pred_up*4],ll,rl,[pred2_umap]
+            return [pred_up*4],ll,rl,umaps

@@ -41,10 +41,11 @@ from models_cgi_resnet_full_rec import __t_models__, model_loss_train, model_los
 from utils import *
 from torch.utils.data import DataLoader
 import gc
+from torchvision.utils import save_image
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to CGI-Stereo')
 
@@ -268,12 +269,17 @@ def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
     # print("umaps 1/2 output ",t_umaps[2].min() , t_umaps[2].max())
 
     # print("tumaps: ",t_umaps[-1].size(),len(t_umaps)) 
+
+
     t_down_umaps = []
     t_down_umaps.append(t_umaps[-1]) #1/4_
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/8
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/16
     t_down_umaps.append(F.interpolate(t_down_umaps[-1], scale_factor=0.5, mode='bilinear', align_corners=False)) # 1/32
     
+    # print("umaps len: ",len(t_down_umaps))
+    # for i in range(len(t_down_umaps)):
+    #     save_image(t_down_umaps[i].float(),'resnetfull_umaps/'+str(i)+'_test_umap.png')
 
     
     # for i in range(len(t_down_umaps)):
@@ -286,8 +292,6 @@ def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
     [1/2,1/4,1/8,1/16,1/32]
     
     '''
-    
-
 
     # left features aligned 
     s_ll[0] = align(s_ll[0],s_ll[0].size()[1],t_ll[0].size()[1])
@@ -337,8 +341,6 @@ def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
     feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[2],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
     feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[3],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
 
-    
-
     feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
     feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[1],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen2)  
     feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[2],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
@@ -363,7 +365,6 @@ def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
     loss = loss + kd_loss
     # print("loss sum ",loss)
     
-    
     disp_ests_final = [disp_ests[0]]
 
     scalar_outputs = {"loss": loss}
@@ -378,7 +379,6 @@ def train_sample(sample, gen1,gen2,gen3, compute_metrics=False):
             # scalar_outputs["Thres3"] = [Thres_metric(disp_est, disp_gt, mask, 3.0) for disp_est in disp_ests_final]
     loss.backward()
     optimizer.step()
-
 
     # Add knoledge distillation error here
     return tensor2float(loss), tensor2float(scalar_outputs)
@@ -446,31 +446,26 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     #         nn.ReLU(inplace=True), 
     #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
-
-
     mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
 
     # mask generation
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
-    
 
     # threshold for umaps
-    thresh = 0.5
+    thresh = 0.90
 
-    # if mask is not None:
-    #     ma = mask.max()
-    #     mi = mask.min()
-    #     thr = mi + (ma-mi) * thresh
-    #     mat  = torch.where(mask > thr, 0, 1).to(device)
+    if mask is not None:
+        ma = mask.max()
+        mi = mask.min()
+        thr = mi + (ma-mi) * thresh
+        mat  = torch.where(mask > thr, 0, 1).to(device)
 
-
-
+    save_image(mat.float(),'resnetfull_umaps/0_test_mask.png')
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
     # print("masked_feat: " ,masked_feat.size())
-
     
     # Genearate feature from student to be compared with teacher
     new_feat = generation(masked_feat)

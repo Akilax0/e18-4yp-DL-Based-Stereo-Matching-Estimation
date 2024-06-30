@@ -560,7 +560,7 @@ class cfnet(nn.Module):
         pred2_v_s4 = disparity_variance(pred2_possibility_s4, self.maxdisp // 8, pred2_s4_cur)  # get the variance
         # print(" =================== CFNET ==========================")
         # print("pred2_prob , pred: ",pred2_possibility_s4.size(),pred2_s4_cur.size())
-        umaps.append(pred2_s4)
+        umaps.append(pred2_v_s4)
 
         pred2_v_s4 = pred2_v_s4.sqrt()
         mindisparity_s3 = pred2_s4_cur - (self.gamma_s3 + 1) * pred2_v_s4 - self.beta_s3

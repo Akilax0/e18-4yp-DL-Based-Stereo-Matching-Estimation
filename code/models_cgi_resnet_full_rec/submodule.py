@@ -225,7 +225,6 @@ def regression_topk(cost, disparity_samples, k,d):
     # This was a good error ;)
     cost1 = cost
 
-
     _, ind = cost.sort(1, True)
     pool_ind = ind[:, :k]
     # print("pool ind: ",pool_ind.size())
@@ -243,7 +242,6 @@ def regression_topk(cost, disparity_samples, k,d):
 
     return pred , prob
     
-
 def disparity_variance_confidence(x, disparity_samples, disparity):
     # the shape of disparity should be B,1,H,W, return is the uncertainty estimation
     assert len(x.shape) == 4
@@ -259,3 +257,9 @@ def disparity_variance(x, maxdisp, disparity):
     
     # print("x & disp_values: ",x.size() , disp_values.size())
     return torch.sum(x * disp_values, 1, keepdim=True)
+
+def disparity_regression(x, maxdisp):
+    assert len(x.shape) == 4
+    disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
+    disp_values = disp_values.view(1, maxdisp, 1, 1)
+    return torch.sum(x * disp_values, 1, keepdim=False)

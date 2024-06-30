@@ -259,3 +259,10 @@ def disparity_variance(x, maxdisp, disparity):
     
     # print("x & disp_values: ",x.size() , disp_values.size())
     return torch.sum(x * disp_values, 1, keepdim=True)
+
+
+def disparity_regression(x, maxdisp):
+    assert len(x.shape) == 4
+    disp_values = torch.arange(0, maxdisp, dtype=x.dtype, device=x.device)
+    disp_values = disp_values.view(1, maxdisp, 1, 1)
+    return torch.sum(x * disp_values, 1, keepdim=False)

@@ -253,15 +253,15 @@ class KITTI(StereoDataset):
         super(KITTI, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispKITTI)
         assert os.path.exists(root)
 
-        root_12 = '/storage/datasets/kitti/stereo_2012/'
-        image1_list = sorted(glob(os.path.join(root_12, image_set, 'colored_0/*_10.png')))
-        image2_list = sorted(glob(os.path.join(root_12, image_set, 'colored_1/*_10.png')))
-        disp_list = sorted(glob(os.path.join(root_12, 'training', 'disp_occ/*_10.png'))) if image_set == 'training' else [osp.join(root, 'training/disp_occ/000085_10.png')]*len(image1_list)
+        # root_12 = '/storage/datasets/kitti/stereo_2012/'
+        # image1_list = sorted(glob(os.path.join(root_12, image_set, 'colored_0/*_10.png')))
+        # image2_list = sorted(glob(os.path.join(root_12, image_set, 'colored_1/*_10.png')))
+        # disp_list = sorted(glob(os.path.join(root_12, 'training', 'disp_occ/*_10.png'))) if image_set == 'training' else [osp.join(root, 'training/disp_occ/000085_10.png')]*len(image1_list)
 
         root_15 = '/storage/datasets/kitti/stereo_2015/'
-        image1_list += sorted(glob(os.path.join(root_15, image_set, 'image_2/*_10.png')))
-        image2_list += sorted(glob(os.path.join(root_15, image_set, 'image_3/*_10.png')))
-        disp_list += sorted(glob(os.path.join(root_15, 'training', 'disp_occ_0/*_10.png'))) if image_set == 'training' else [osp.join(root, 'training/disp_occ_0/000085_10.png')]*len(image1_list)
+        image1_list = sorted(glob(os.path.join(root_15, image_set, 'image_2/*_10.png')))
+        image2_list = sorted(glob(os.path.join(root_15, image_set, 'image_3/*_10.png')))
+        disp_list = sorted(glob(os.path.join(root_15, 'training', 'disp_occ_0/*_10.png'))) if image_set == 'training' else [osp.join(root, 'training/disp_occ_0/000085_10.png')]*len(image1_list)
 
         for idx, (img1, img2, disp) in enumerate(zip(image1_list, image2_list, disp_list)):
             self.image_list += [ [img1, img2] ]
