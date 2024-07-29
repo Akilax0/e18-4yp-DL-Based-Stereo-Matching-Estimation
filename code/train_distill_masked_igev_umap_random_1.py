@@ -136,14 +136,14 @@ if args.resume:
     all_saved_ckpts = sorted(all_saved_ckpts, key=lambda x: int(x.split('_')[-1].split('.')[0]))
     # use the latest checkpoint file
     loadckpt = os.path.join(args.logdir, all_saved_ckpts[-1])
-    print("loading the lastest model in logdir: {}".format(loadckpt))
+    # print("loading the lastest model in logdir: {}".format(loadckpt))
     state_dict = torch.load(loadckpt)
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
     start_epoch = state_dict['epoch'] + 1
 elif args.loadckpt:
     # load the checkpoint file specified by args.loadckpt
-    print("loading model {}".format(args.loadckpt))
+    # print("loading model {}".format(args.loadckpt))
     state_dict = torch.load(args.loadckpt)
     model_dict = model.state_dict()
     pre_dict = {k: v for k, v in state_dict['model'].items() if k in model_dict}
@@ -161,9 +161,9 @@ elif args.loadckpt:
 
 # Loading for IGEV 
 
-print("loading teacher model {}".format(args.restore_ckpt))
+# print("loading teacher model {}".format(args.restore_ckpt))
 t_state_dict = torch.load(args.restore_ckpt)
-print("state dict: ",t_state_dict.keys())
+# print("state dict: ",t_state_dict.keys())
 t_model.load_state_dict(t_state_dict,strict=True)
 
 
@@ -245,6 +245,11 @@ def train_sample(sample, compute_metrics=False):
         # t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
         # t_pred1_s2,t_pred1_s3_up,t_pred2_s4,t_ll,t_rl,_,t_umaps = t_model(imgL,imgR)
         t_init_disp,t_disp_reds,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
+        
+        
+    # print("disp ests: ",disp_ests[0].shape)
+    # # for i in t_disp_reds:
+    # print("disp reds : ",t_disp_reds[-1].shape)
 
     # introducing CFNet
     # print("CFNET outputs + left and right features: ",len(t_pred1_s2[0]),len(t_pred1_s3_up[0]),len(t_pred2_s4[0]))     
@@ -320,7 +325,7 @@ def train_sample(sample, compute_metrics=False):
     lambda_cvolume = 0 
     lambda_conv4 = 0 
     lambda_conv8 = 0 
-    lambda_logit = 0.001
+    lambda_logit = 0 
     
     # using default value
     # change according to usecase
@@ -349,7 +354,10 @@ def train_sample(sample, compute_metrics=False):
     # sumap = F.interpolate(s_down_umaps[0], scale_factor=2, mode='bilinear', align_corners=False) # 1/2
     # sumap = F.interpolate(sumap, scale_factor=2, mode='bilinear', align_corners=False) # 1
 
-    # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_pred1_s2[0].unsqueeze(1),1,1,lambda_mgd=lambda_mgd, mask = sumap)
+    # logit_loss = get_dis_loss(disp_ests[0].unsqueeze(1),t_disp_reds[-1],1,1,lambda_mgd=lambda_mgd, mask = t_down_umaps[0])
+    # logit_loss = F.mse_loss(disp_ests[0].unsqueeze(1),t_disp_reds[-1])
+    
+    # print("losses:",loss,feat_loss*0.01,logit_loss*0.01)
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
         lambda_conv4 * conv4_loss + lambda_conv8 * conv8_loss + lambda_logit * logit_loss
@@ -455,16 +463,15 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.75
+    thresh = 0.50
 
-    # if mask is not None:
-    #     ma = mask.max()
-    #     mi = mask.min()
-    #     thr = mi + (ma-mi) * thresh
-    #     mat  = torch.where(mask > thr, 0, 1).to(device)
+    if mask is not None:
+        ma = mask.max()
+        mi = mask.min()
+        thr = mi + (ma-mi) * thresh
+        mat  = torch.where(mask > thr, 0, 1).to(device)
         # Expand mask here 
         # mat = random_masking(mat)
-        
         # print("mask comparison: ",mat.size(),mat1.size())
 
 
@@ -480,6 +487,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # check the implementation here for distillation loss
 
     dis_loss = F.mse_loss(new_feat,preds_T)
+    # dis_loss = F.mse_loss(preds_S,preds_T)
     # dis_loss = F.smooth_l1_loss(new_feat,preds_T)
 
     return dis_loss

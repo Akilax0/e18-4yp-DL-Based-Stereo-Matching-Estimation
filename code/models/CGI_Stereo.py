@@ -235,14 +235,15 @@ class CGI_Stereo(nn.Module):
         # print("x32: ",features_left[3].size())
 
         features_left, features_right = self.feature_up(features_left, features_right)
+        # print("x4 up: ",features_left[0].size())
+        # print("x8 up: ",features_left[1].size())
+        # print("x16 up: ",features_left[2].size())
+        # print("x32 up: ",features_left[3].size())
+
         # Upscaled 4,8,16,32
         ll = features_left
         rl = features_right
         
-        # print("x4: ",features_left[0].size())
-        # print("x8: ",features_left[1].size())
-        # print("x16: ",features_left[2].size())
-        # print("x32: ",features_left[3].size())
         
         # print("feature_left: ",features_left[0].size())
         stem_2x = self.stem_2(left)
@@ -258,15 +259,29 @@ class CGI_Stereo(nn.Module):
 
         match_left = self.desc(self.conv(features_left[0]))
         match_right = self.desc(self.conv(features_right[0]))
+        
+        # print("match left: ",match_left.size())
 
         corr_volume = build_norm_correlation_volume(match_left, match_right, self.maxdisp//4)
+        # print("corr volume:",corr_volume.size())
+
         corr_volume = self.corr_stem(corr_volume)
         feat_volume = self.semantic(features_left[0]).unsqueeze(2)
+        # print("feat volume: ",feat_volume.size())
+
         volume = self.agg(feat_volume * corr_volume)
+        # print("volume: ",volume.size())
+
+
         cost,conv8= self.hourglass_fusion(volume, features_left)
+        # print("cost volume: ",cost.size())
+
 
         xspx = self.spx_4(features_left[0])
+        # print("xspx: ",xspx.size())
+        # print("stem2x: ",stem_2x.size())
         xspx = self.spx_2(xspx, stem_2x)
+
         spx_pred = self.spx(xspx)
         spx_pred = F.softmax(spx_pred, 1)
 

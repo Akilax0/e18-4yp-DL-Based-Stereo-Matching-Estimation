@@ -51,7 +51,8 @@ parser = argparse.ArgumentParser(description='Knowledge Distillation ACVNet to C
 
 # Additional Args
 parser.add_argument('--t_model', default='CGI_Stereo', help='select a teacher model structure', choices=__t_models__.keys())
-parser.add_argument('--t_loadckpt', default='./checkpoints/cgi_resnet_50/second/checkpoint_000018.ckpt', help='load the weights from pretrained teacher')
+# parser.add_argument('--t_loadckpt', default='./checkpoints/cgi_resnet_50/second/checkpoint_000018.ckpt', help='load the weights from pretrained teacher')
+parser.add_argument('--t_loadckpt', default='./checkpoints/cgi_resnet_50_retrain/second/checkpoint_000018.ckpt', help='load the weights from pretrained teacher')
 
 parser.add_argument('--model', default='CGI_Stereo', help='select a student model structure', choices=__models__.keys())
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
@@ -146,8 +147,19 @@ def train():
     error = 100
 
     device = 0
-    st = time.time()
 
+    # gen1 = nn.Sequential(
+    #         nn.Conv2d(560,560, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(560,560, kernel_size=3, padding=1)).to(device)
+    # gen2 = nn.Sequential(
+    #         nn.Conv2d(1024,1024, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(1024,1024, kernel_size=3, padding=1)).to(device)
+    # gen3 = nn.Sequential(
+    #         nn.Conv2d(2048, 2048, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(2048,2048, kernel_size=3, padding=1)).to(device)
     gen1 = nn.Sequential(
             nn.Conv2d(560,560, kernel_size=3, padding=1),
             nn.ReLU(inplace=True), 
@@ -169,7 +181,7 @@ def train():
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             start_time = time.time()
             do_summary = global_step % args.summary_freq == 0
-            loss, scalar_outputs = train_sample(sample,gen1,gen2,gen3,st,epoch_idx,compute_metrics=do_summary)
+            loss, scalar_outputs = train_sample(sample,gen1,gen2,gen3,start_time,epoch_idx,compute_metrics=do_summary)
             if do_summary:
                 save_scalars(logger, 'train', scalar_outputs, global_step)
                 # save_images(logger, 'train', image_outputs, global_step)
@@ -236,8 +248,8 @@ def train_sample(sample, gen1,gen2,gen3, st, epoch, compute_metrics=False):
         # t_disp_ests,t_feat,t_cvolume,t_conv4,t_conv8 = t_model(imgL,imgR)
         t_disp_ests,t_ll,t_rl,t_umaps = t_model(imgL,imgR)
 
-        save_image(imgL,'resnet50_umaps/0_test_img.png')
-        save_image(t_disp_ests[0],'resnet50_umaps/0_test_disp.png')
+        # save_image(imgL,'resnet50_umaps/image/'+str(time.time()-st)+'_test_img.png')
+        # save_image(t_disp_ests[0],'resnet50_umaps/0_test_disp.png')
 
     # device = t_ll[0].get_device()
 
@@ -287,7 +299,7 @@ def train_sample(sample, gen1,gen2,gen3, st, epoch, compute_metrics=False):
     # for i in range(len(t_down_umaps)):
 
     # left 1/4th umap
-    save_image(t_down_umaps[0].float(),'resnet50_umaps/0_test_umap.png')
+    # save_image(t_down_umaps[0].float(),'resnet50_umaps/umap/'+str(time.time()-st)+'_test_umap.png')
 
     
     # for i in range(len(t_down_umaps)):
@@ -344,8 +356,8 @@ def train_sample(sample, gen1,gen2,gen3, st, epoch, compute_metrics=False):
     # detection / instance - 0.45
     lambda_mgd = 0.75
 
-    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=s_ll[0].size()[1], teacher_channels=4, lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
-    # feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
+    # feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=st, teacher_channels=4, lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen2)  
+    feat_loss = feat_loss + get_dis_loss(s_ll[0], t_ll[0],student_channels=s_ll[0].size()[1], teacher_channels=t_ll[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen2)  
     feat_loss = feat_loss + get_dis_loss(s_ll[1], t_ll[1],student_channels=s_ll[1].size()[1], teacher_channels=t_ll[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen2)  
     feat_loss = feat_loss + get_dis_loss(s_ll[2], t_ll[2],student_channels=s_ll[2].size()[1], teacher_channels=t_ll[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
     feat_loss = feat_loss + get_dis_loss(s_ll[3], t_ll[3],student_channels=s_ll[3].size()[1], teacher_channels=t_ll[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
@@ -353,7 +365,7 @@ def train_sample(sample, gen1,gen2,gen3, st, epoch, compute_metrics=False):
     
 
     # feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=4, lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
-    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen1)  
+    feat_loss = feat_loss + get_dis_loss(s_rl[0], t_rl[0],student_channels=s_rl[0].size()[1], teacher_channels=t_rl[0].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[0], generation = gen2)  
     feat_loss = feat_loss + get_dis_loss(s_rl[1], t_rl[1],student_channels=s_rl[1].size()[1], teacher_channels=t_rl[1].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[1], generation = gen2)  
     feat_loss = feat_loss + get_dis_loss(s_rl[2], t_rl[2],student_channels=s_rl[2].size()[1], teacher_channels=t_rl[2].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[2], generation = gen3)  
     feat_loss = feat_loss + get_dis_loss(s_rl[3], t_rl[3],student_channels=s_rl[3].size()[1], teacher_channels=t_rl[3].size()[1], lambda_mgd=lambda_mgd, mask = t_down_umaps[3], generation = gen3)  
@@ -468,7 +480,7 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # print("matrix: " ,mat.size())
 
     # threshold for umaps
-    thresh = 0.0075
+    thresh = 0.05
 
     if mask is not None:
         ma = mask.max()
@@ -476,8 +488,8 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
         thr = mi + (ma-mi) * thresh
         mat  = torch.where(mask > thr, 0, 1).to(device)
 
-    if teacher_channels==4:
-        save_image(mat.float(),'resnet50_umaps/0_test_mask.png')
+    # if teacher_channels==4:
+    #     save_image(mat.float(),'resnet50_umaps/mask/0_test_mask.png')
 
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)
@@ -492,11 +504,12 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
     # dis_loss = loss_mse(new_feat, preds_T)/N
     dis_loss = F.mse_loss(new_feat,preds_T)
     # print("dis_loss : " ,dis_loss.size())
-    if teacher_channels==4:
-        save_image(mat.float(),'resnet50_umaps/0_test_mask.png')
-        save_image(preds_S[0,0,:,:],'resnet50_umaps/0_test_student.png')
-        save_image(preds_T[0,0,:,:],'resnet50_umaps/0_test_teacher.png')
-        save_image(new_feat[0,0,:,:],'resnet50_umaps/0_test_gen.png')
+
+    # if teacher_channels==4:
+    #     save_image(mat.float(),'resnet50_umaps/mask/'+str(time.time()-student_channels)+'_test_mask.png')
+    #     save_image(preds_S[0,0,:,:],'resnet50_umaps/student/'+str(time.time()-student_channels)+'_test_student.png')
+    #     save_image(preds_T[0,0,:,:],'resnet50_umaps/teacher/'+str(time.time()-student_channels)+'_test_teacher.png')
+    #     save_image(new_feat[0,0,:,:],'resnet50_umaps/gen/'+str(time.time()-student_channels)+'_test_gen.png')
 
     return dis_loss
 

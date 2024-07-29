@@ -131,10 +131,10 @@ class FeatUp(SubModule):
         x4 = self.conv4(x4)
         y4 = self.conv4(y4)
 
-        # print("x4: ",x4.size())
-        # print("x8: ",x8.size())
-        # print("x16: ",x16.size())
-        # print("x32: ",x32.size())
+        # print("x4 up: ",x4.size())
+        # print("x8 up: ",x8.size())
+        # print("x16 up: ",x16.size())
+        # print("x32 up: ",x32.size())
         return [x4, x8, x16,x32], [y4, y8, y16,y32]
 
 
@@ -256,20 +256,21 @@ class CGI_Stereo(nn.Module):
         # chans = [16, 24, 32, 96, 160]
         chans = [64, 256, 512, 1024, 2048]
 
+        # self.stem_2 = nn.Sequential(
+        #     BasicConv(3, 32, kernel_size=3, stride=2, padding=1),
+        #     nn.Conv2d(32, 32, 3, 1, 1, bias=False),
+        #     nn.BatchNorm2d(32), nn.ReLU()
+        #     )
         self.stem_2 = nn.Sequential(
-            BasicConv(3, 32, kernel_size=3, stride=2, padding=1),
-            nn.Conv2d(32, 32, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(32), nn.ReLU()
+            BasicConv(3, 256, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(256, 256, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(256), nn.ReLU()
             )
-        # Implemented to match the channels no
-        # self.stem_2_ext = nn.Sequential(
-        #     BasicConv(32, 192, kernel_size=1, stride=1, padding=0))
-        
         
         self.stem_4 = nn.Sequential(
-            BasicConv(32, 48, kernel_size=3, stride=2, padding=1),
-            nn.Conv2d(48, 48, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(48), nn.ReLU()
+            BasicConv(256, 512, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(512, 512, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(512), nn.ReLU()
             )
         # self.stem_4 = nn.Sequential(
         #     BasicConv(32, 64, kernel_size=3, stride=2, padding=1),
@@ -277,11 +278,13 @@ class CGI_Stereo(nn.Module):
         #     nn.BatchNorm2d(64), nn.ReLU()
         #     )
 
-        self.spx = nn.Sequential(nn.ConvTranspose2d(2*32, 9, kernel_size=4, stride=2, padding=1),)
+        # self.spx = nn.Sequential(nn.ConvTranspose2d(2*32, 9, kernel_size=4, stride=2, padding=1),)
+        self.spx = nn.Sequential(nn.ConvTranspose2d(2*256, 9, kernel_size=4, stride=2, padding=1),)
         # self.spx = nn.Sequential(nn.ConvTranspose2d(2*192, 9, kernel_size=4, stride=2, padding=1),)
         
 
-        self.spx_2 = Conv2x(32, 32, True)
+        # self.spx_2 = Conv2x(32, 32, True)
+        self.spx_2 = Conv2x(256,256, True)
         # self.spx_2 = Conv2x(192, 192, True)
 
         # self.spx_4 = nn.Sequential(
@@ -289,23 +292,25 @@ class CGI_Stereo(nn.Module):
         #     nn.Conv2d(32, 32, 3, 1, 1, bias=False),
         #     nn.BatchNorm2d(32), nn.ReLU()
         #     )
+        # self.spx_4 = nn.Sequential(
+        #     BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
+        #     nn.Conv2d(187, 32, 3, 1, 1, bias=False),
+        #     nn.BatchNorm2d(32), nn.ReLU()
+        # )
         self.spx_4 = nn.Sequential(
-            BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(187, 32, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(32), nn.ReLU()
+            BasicConv(1024, 256, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(256,256, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(256), nn.ReLU()
         )
 
-        # self.spx_4 = nn.Sequential(
-        #     BasicConv(576, 192, kernel_size=3, stride=1, padding=1),
-        #     nn.Conv2d(192, 192, 3, 1, 1, bias=False),
-        #     nn.BatchNorm2d(192), nn.ReLU()
-        #     )
 
         # self.conv = BasicConv(96, 48, kernel_size=3, padding=1, stride=1)
         # self.conv = BasicConv(576, 288, kernel_size=3, padding=1, stride=1)
         # self.desc = nn.Conv2d(288, 288, kernel_size=1, padding=0, stride=1)
-        self.conv = BasicConv(560, 280, kernel_size=3, padding=1, stride=1)
-        self.desc = nn.Conv2d(280, 280, kernel_size=1, padding=0, stride=1)
+        # self.conv = BasicConv(560, 280, kernel_size=3, padding=1, stride=1)
+        # self.desc = nn.Conv2d(280, 280, kernel_size=1, padding=0, stride=1)
+        self.conv = BasicConv(1024, 512, kernel_size=3, padding=1, stride=1)
+        self.desc = nn.Conv2d(512, 512, kernel_size=1, padding=0, stride=1)
         
         
         # self.semantic = nn.Sequential(
@@ -315,19 +320,23 @@ class CGI_Stereo(nn.Module):
         # self.semantic = nn.Sequential(
         #     BasicConv(576, 192, kernel_size=3, stride=1, padding=1),
         #     nn.Conv2d(192, 48, kernel_size=1, padding=0, stride=1, bias=False))
+        # self.semantic = nn.Sequential(
+        #     BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
+        #     nn.Conv2d(187, 46, kernel_size=1, padding=0, stride=1, bias=False))
         self.semantic = nn.Sequential(
-            BasicConv(560, 187, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(187, 46, kernel_size=1, padding=0, stride=1, bias=False))
+            BasicConv(1024, 256, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(256, 64, kernel_size=1, padding=0, stride=1, bias=False))
         
         
         # self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
         # self.agg = BasicConv(48, 48, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
-        self.agg = BasicConv(46, 46, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        self.agg = BasicConv(64, 64, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
 
         # self.hourglass_fusion = hourglass_fusion(8)
-        self.hourglass_fusion = hourglass_fusion(46)
+        self.hourglass_fusion = hourglass_fusion(64)
         # self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
-        self.corr_stem = BasicConv(1, 46, is_3d=True, kernel_size=3, stride=1, padding=1)
+        # self.corr_stem = BasicConv(1, 46, is_3d=True, kernel_size=3, stride=1, padding=1)
+        self.corr_stem = BasicConv(1, 64, is_3d=True, kernel_size=3, stride=1, padding=1)
 
     def forward(self, left, right):
 
@@ -371,17 +380,17 @@ class CGI_Stereo(nn.Module):
 
         # print("corr_volume: ",corr_volume.size())
         # print("feat volume: ",feat_volume.size())
+        
+        
         volume = self.agg(feat_volume * corr_volume)
         # print("volume: ",volume.size())
+
         cost,conv8= self.hourglass_fusion(volume, features_left)
-        # print("volume: ",volume.size())
+        # print("cost: ",cost.size())
 
         xspx = self.spx_4(features_left[0])
         # print("xspx:",xspx.size())
         # print("stem2x: ",stem_2x.size())
-        
-        # Matching channel no
-        # stem_2x = self.stem_2_ext(stem_2x)
 
         xspx = self.spx_2(xspx, stem_2x)
         # print("xspx:",xspx.size())

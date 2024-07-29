@@ -78,10 +78,12 @@ for i in trange(len(all_limg)):
 
     occ_mask = np.ascontiguousarray(Image.open(all_mask[i]))
 
+    st = time.time()
+
     with torch.no_grad():
         # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
         pred_disp  = model(limg_tensor, rimg_tensor)
-        print("pred disp: ",len(pred_disp[0]))
+        # print("pred disp: ",len(pred_disp[0]))
         pred_disp = pred_disp[0][0]
 
         pred_disp = pred_disp[:, hi - h:, wi - w:]
@@ -98,6 +100,7 @@ for i in trange(len(all_limg)):
     pred_mae += np.mean(pred_error[mask])
 
     ########save
+    time = time.time() - st
 
     filename = os.path.join('./demo/ETH3D/', all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
     pred_np_save = np.round(predict_np*4 * 256).astype(np.uint16)

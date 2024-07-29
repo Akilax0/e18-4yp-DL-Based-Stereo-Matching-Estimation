@@ -29,6 +29,7 @@ from PIL import Image
 from torchvision import transforms
 from datasets import readpfm as rp
 # cudnn.benchmark = True
+import time
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -54,6 +55,7 @@ model.eval()
 os.makedirs('./demo/middlebury/', exist_ok=True)
 
 def test_trainset():
+
     op = 0
     mae = 0
 
@@ -79,6 +81,8 @@ def test_trainset():
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])(rimg)
         limg_tensor = limg_tensor.unsqueeze(0).cuda()
         rimg_tensor = rimg_tensor.unsqueeze(0).cuda()
+
+        st = time.time()
 
         with torch.no_grad():
             pred_disp  = model(limg_tensor, rimg_tensor)[-1]
@@ -106,15 +110,18 @@ def test_trainset():
         op += np.sum(error > 2.0) / (w * h - np.sum(mask))
         mae += np.sum(error) / (w * h - np.sum(mask))
 
+        time_taken = time.time() - st
 
         #######save
 
         filename = os.path.join('./demo/middlebury/', limg_path.split('/')[-2]+limg_path.split('/')[-1])
         pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
         cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
+        
 
     print("######Bad 2.0", op / 15 * 100)
     print("######EPE", mae / 15)
+    print("TIME: ",time_taken)
 
 
 if __name__ == '__main__':

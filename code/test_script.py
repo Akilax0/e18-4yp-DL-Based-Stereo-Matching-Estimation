@@ -45,17 +45,21 @@ from datasets import ETH3D_loader as et
 from datasets.readpfm import readPFM
 from datasets import readpfm as rp
 
+from torchvision.utils import save_image
+import matplotlib.image
+
 import cv2
 
 from models import __models__
 # from models_acv import __t_models__
 # from models_cgi_resnet_full_rec import __models__
-# from models_cgi_resnet50 import __models__
+# from models_cgi_resnet50 import __t_models__
+# from models_cgi_resnet50_fit import __t_models__
 
 
 # from models_igev.core.igev_stereo import IGEVStereo
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
 parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__models__.keys())
@@ -84,14 +88,14 @@ def kitti(v,loadckpt):
     test_rimg = all_rimg + test_rimg
     test_ldisp = all_ldisp + test_ldisp
 
-    model = __models__[args.model](maxdisp)
+    model = __t_models__[args.model](maxdisp)
     model = nn.DataParallel(model)
     # model = nn.DataParallel(IGEVStereo(args))
 
     model.cuda()
     model.eval()
 
-    # model = __models__[args.model](args.maxdisp)
+    # model = __t_models[args.model](args.maxdisp)
     # model = nn.DataParallel(model)
     # model.cuda()
     # model.eval()
@@ -101,9 +105,13 @@ def kitti(v,loadckpt):
 
     pred_mae = 0
     pred_op = 0
+    
+    st = 0 
+    
     for i in trange(len(test_limg)):
         limg = Image.open(test_limg[i]).convert('RGB')
         rimg = Image.open(test_rimg[i]).convert('RGB')
+
 
         w, h = limg.size
         m = 32
@@ -128,14 +136,29 @@ def kitti(v,loadckpt):
             # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
             pred_disp  = model(limg_tensor, rimg_tensor)
             # print("pred disp: ",len(pred_disp))
+
             pred_disp = pred_disp[-1]
+
 
             pred_disp = pred_disp[:, hi - h:, wi - w:]
 
         predict_np = pred_disp.squeeze().cpu().numpy()
 
+
         op_thresh = 3
         mask = (disp_gt > 0) & (disp_gt < maxdisp)
+
+        # if v=='2012':
+        #     save_image(limg_tensor.float(),'test_images/KITTI2012/images/'+str(st)+'_limg.png')
+        #     matplotlib.image.imsave('test_images/KITTI2012/pred/'+str(st)+'_pred.png',predict_np*mask.astype(np.float32))
+        #     matplotlib.image.imsave('test_images/KITTI2012/gt/'+str(st)+'_gt.png',disp_gt*mask.astype(np.float32))
+        # else:
+        #     save_image(limg_tensor.float(),'test_images/KITTI2015/images/'+str(st)+'_limg.png')
+        #     matplotlib.image.imsave('test_images/KITTI2015/pred/'+str(st)+'_pred.png',predict_np*mask.astype(np.float32))
+        #     matplotlib.image.imsave('test_images/KITTI2015/gt/'+str(st)+'_gt.png',disp_gt*mask.astype(np.float32))
+            
+        st = st + 1
+
         # print("Sizes: ",predict_np.size(), mask.size(), disp_gt.size())
         error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
 
@@ -173,6 +196,8 @@ def mid(loadckpt):
     
     op = 0
     mae = 0
+
+    st = 0 
 
     for i in trange(len(train_limg)):
 
@@ -216,6 +241,13 @@ def mid(loadckpt):
         mask = (disp_gt <= 0) | (occ_mask != 255) | (disp_gt >= maxdisp)
         # mask = (disp_gt <= 0) | (disp_gt >= args.maxdisp)
 
+        save_image(limg_tensor.float(),'test_images/mid/limages/'+str(st)+'_limg.png')
+        save_image(rimg_tensor.float(),'test_images/mid/rimages/'+str(st)+'_rimg.png')
+        matplotlib.image.imsave('test_images/mid/pred/'+str(st)+'_pred.png',pred_np)
+        matplotlib.image.imsave('test_images/mid/gt/'+str(st)+'_gt.png',disp_gt)
+        
+        st = st + 1
+
         error = np.abs(pred_np - disp_gt)
         error[mask] = 0
         print("#######Bad", limg_path, np.sum(error > 2.0) / (w * h - np.sum(mask)))
@@ -244,7 +276,7 @@ def eth3d(loadckpt):
     all_limg, all_rimg, all_disp, all_mask = et.et_loader(datapath)
 
 
-    model = __models__[args.model](maxdisp)
+    model = __t_models__[args.model](maxdisp)
     model = nn.DataParallel(model)
     model.cuda()
     model.eval()
@@ -257,6 +289,9 @@ def eth3d(loadckpt):
 
     pred_mae = 0
     pred_op = 0
+    
+    st = 0  
+    
     for i in trange(len(all_limg)):
         limg = Image.open(all_limg[i]).convert('RGB')
         rimg = Image.open(all_rimg[i]).convert('RGB')
@@ -293,6 +328,13 @@ def eth3d(loadckpt):
         op_thresh = 1
         mask = (disp_gt > 0) & (occ_mask == 255)
         # mask = disp_gt > 0
+
+        # save_image(limg_tensor.float(),'test_images/ETH3D/images/'+str(st)+'_limg.png')
+        # matplotlib.image.imsave('test_images/ETH3D/pred/'+str(st)+'_pred.png',predict_np*mask.astype(np.float32))
+        # matplotlib.image.imsave('test_images/ETH3D/gt/'+str(st)+'_gt.png',disp_gt*mask.astype(np.float32))
+        
+        st = st + 1
+
         error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
 
         pred_error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
@@ -327,24 +369,23 @@ if __name__ == '__main__':
     load_19 = args.loadckpt+"checkpoint_000018.ckpt"
     load_20 = args.loadckpt+"checkpoint_000019.ckpt"
     
-    loads = [load_5,load_10,load_15,load_16,load_17,load_18,load_19,load_20]
+    # loads = [load_5,load_10,load_15,load_16,load_17,load_18,load_19,load_20]
+    loads = [args.loadckpt]
+    # loads = [load_20]
     
-    for i in loads:
-        print(i)
-    
-    print("KITTI 2012 TESTING")
-    kitti_12 = []
-    for i in loads: 
-        print("current test ckpt: ",i)
-        kitti_12.append([kitti('2012',i)])
-        print(kitti_12[-1])
+    # print("KITTI 2012 TESTING")
+    # kitti_12 = []
+    # for i in loads: 
+    #     print("current test ckpt: ",i)
+    #     kitti_12.append([kitti('2012',i)])
+    #     print(kitti_12[-1])
 
-    print("KITTI 2015 TESTING")
-    kitti_15 = []
-    for i in loads: 
-        print("current test ckpt: ",i)
-        kitti_15.append([kitti('2015',i)])
-        print(kitti_15[-1])
+    # print("KITTI 2015 TESTING")
+    # kitti_15 = []
+    # for i in loads: 
+    #     print("current test ckpt: ",i)
+    #     kitti_15.append([kitti('2015',i)])
+    #     print(kitti_15[-1])
 
     print("MIDDLEBURY TESTING")
     mid_res = []
@@ -353,12 +394,12 @@ if __name__ == '__main__':
         mid_res.append([mid(i)])
         print(mid_res[-1])
 
-    print("ETH3D TESTING")
-    eth_res = []
-    for i in loads: 
-        print("current test ckpt: ",i)
-        eth_res.append([eth3d(i)])
-        print(eth_res[-1])
+    # print("ETH3D TESTING")
+    # eth_res = []
+    # for i in loads: 
+    #     print("current test ckpt: ",i)
+    #     eth_res.append([eth3d(i)])
+    #     print(eth_res[-1])
 
     print("SAVING RESULTS")
 

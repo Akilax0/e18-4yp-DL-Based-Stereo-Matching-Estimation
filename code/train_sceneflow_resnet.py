@@ -18,7 +18,8 @@ from datasets import __datasets__
 # from models import __models__, model_loss_train, model_loss_test
 # from models_cgi_resnet import __models__, model_loss_train, model_loss_test
 # from models_cgi_resnet_full import __models__, model_loss_train, model_loss_test
-from models_cgi_resnet50 import __models__, model_loss_train, model_loss_test
+# from models_cgi_resnet50 import __t_models__, model_loss_train, model_loss_test
+from models_cgi_resnet50_fit import __t_models__, model_loss_train, model_loss_test
 
 
 from utils import *
@@ -26,11 +27,11 @@ from torch.utils.data import DataLoader
 import gc
 
 cudnn.benchmark = True
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
-parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__models__.keys())
+parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__t_models__.keys())
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
 
 parser.add_argument('--dataset', default='sceneflow', help='dataset name', choices=__datasets__.keys())
@@ -75,7 +76,7 @@ TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_wo
 TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 # model, optimizer
-model = __models__[args.model](args.maxdisp)
+model = __t_models__[args.model](args.maxdisp)
 model = nn.DataParallel(model)
 model.cuda()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999))

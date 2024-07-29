@@ -13,6 +13,7 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+import time
 
 from datasets import KITTI2015loader as kt2015
 from datasets import KITTI2012loader as kt2012
@@ -28,7 +29,7 @@ parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matc
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
 parser.add_argument('--datapath', default="/data/KITTI/KITTI_2015/training/", help='data path')
 parser.add_argument('--kitti', type=str, default='2015')
-parser.add_argument('--loadckpt', default='./pretrained_models/CGI_Stereo/sceneflow.ckpt',help='load the weights from a specific checkpoint')
+# parser.add_argument('--loadckpt', default='./pretrained_models/CGI_Stereo/sceneflow.ckpt',help='load the weights from a specific checkpoint')
 
 # igev
 
@@ -77,10 +78,11 @@ t_model.eval()
 
 
 # Loading for IGEV 
-print("loading teacher model {}".format(args.restore_ckpt))
+# print("loading teacher model {}".format(args.restore_ckpt))
 t_state_dict = torch.load(args.restore_ckpt)
-print("state dict: ",t_state_dict.keys())
+# print("state dict: ",t_state_dict.keys())
 t_model.load_state_dict(t_state_dict,strict=True)
+
 
 pred_mae = 0
 pred_op = 0
@@ -106,6 +108,8 @@ for i in trange(len(test_limg)):
     disp_gt = Image.open(test_ldisp[i])
     disp_gt = np.ascontiguousarray(disp_gt, dtype=np.float32) / 256
     gt_tensor = torch.FloatTensor(disp_gt).unsqueeze(0).unsqueeze(0).cuda()
+    
+    st = time.time()
 
     with torch.no_grad():
         # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
@@ -130,8 +134,11 @@ for i in trange(len(test_limg)):
     pred_op += np.sum((pred_error > op_thresh)) / np.sum(mask)
     pred_mae += np.mean(pred_error[mask])
 
+    time_taken = time.time() - st
+
     # print("#### >3.0", np.sum((pred_error > op_thresh)) / np.sum(mask))
     # print("#### EPE", np.mean(pred_error[mask]))
 
 print("#### EPE", pred_mae / len(test_limg))
 print("#### >3.0", pred_op / len(test_limg))
+print("TIME: ",time_taken)

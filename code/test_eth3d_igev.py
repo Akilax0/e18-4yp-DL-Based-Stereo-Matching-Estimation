@@ -20,6 +20,7 @@ from models_igev.core.igev_stereo import IGEVStereo
 from datasets import ETH3D_loader as et
 from datasets.readpfm import readPFM
 import cv2
+import time
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -62,11 +63,10 @@ t_model.eval()
 os.makedirs('./demo/ETH3D/', exist_ok=True)
 
 # Loading for IGEV 
-print("loading teacher model {}".format(args.restore_ckpt))
+# print("loading teacher model {}".format(args.restore_ckpt))
 t_state_dict = torch.load(args.restore_ckpt)
-print("state dict: ",t_state_dict.keys())
+# print("state dict: ",t_state_dict.keys())
 t_model.load_state_dict(t_state_dict,strict=True)
-
 
 pred_mae = 0
 pred_op = 0
@@ -95,6 +95,8 @@ for i in trange(len(all_limg)):
 
     occ_mask = np.ascontiguousarray(Image.open(all_mask[i]))
 
+    st = time.time()
+
     with torch.no_grad():
 
         pred_disp = t_model(limg_tensor, rimg_tensor, iters=32, test_mode=True)
@@ -113,6 +115,8 @@ for i in trange(len(all_limg)):
     pred_op += np.sum(pred_error > op_thresh) / np.sum(mask)
     pred_mae += np.mean(pred_error[mask])
 
+    time_taken = time.time() - st
+
     ########save
 
     filename = os.path.join('./demo/ETH3D/', all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
@@ -120,6 +124,6 @@ for i in trange(len(all_limg)):
     cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
 
 
-
 print(pred_mae / len(all_limg))
 print(pred_op / len(all_limg))
+print("TIME: ",time_taken)

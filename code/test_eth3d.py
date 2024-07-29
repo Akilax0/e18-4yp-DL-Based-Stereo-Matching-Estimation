@@ -13,6 +13,7 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+import time
 
 from models import __models__
 # from models_cgi_resnet import __models__
@@ -48,7 +49,6 @@ os.makedirs('./demo/ETH3D/', exist_ok=True)
 state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
 
-
 pred_mae = 0
 pred_op = 0
 for i in trange(len(all_limg)):
@@ -76,6 +76,8 @@ for i in trange(len(all_limg)):
 
     occ_mask = np.ascontiguousarray(Image.open(all_mask[i]))
 
+    st = time.time()
+
     with torch.no_grad():
 
         pred_disp  = model(limg_tensor, rimg_tensor)[-1]
@@ -93,6 +95,8 @@ for i in trange(len(all_limg)):
     pred_op += np.sum(pred_error > op_thresh) / np.sum(mask)
     pred_mae += np.mean(pred_error[mask])
 
+    time_taken = time.time()-st
+
     ########save
 
     filename = os.path.join('./demo/ETH3D/', all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
@@ -100,6 +104,6 @@ for i in trange(len(all_limg)):
     cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
 
 
-
 print(pred_mae / len(all_limg))
 print(pred_op / len(all_limg))
+print("TIME: ",time_taken)

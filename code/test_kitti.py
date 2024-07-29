@@ -1,4 +1,5 @@
 import torch
+import time
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.autograd import Variable
@@ -58,6 +59,8 @@ model.eval()
 state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
 
+
+
 pred_mae = 0
 pred_op = 0
 for i in trange(len(test_limg)):
@@ -83,6 +86,9 @@ for i in trange(len(test_limg)):
     disp_gt = np.ascontiguousarray(disp_gt, dtype=np.float32) / 256
     gt_tensor = torch.FloatTensor(disp_gt).unsqueeze(0).unsqueeze(0).cuda()
 
+
+    st = time.time()
+
     with torch.no_grad():
         # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
         pred_disp  = model(limg_tensor, rimg_tensor)
@@ -101,9 +107,12 @@ for i in trange(len(test_limg)):
     pred_error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
     pred_op += np.sum((pred_error > op_thresh)) / np.sum(mask)
     pred_mae += np.mean(pred_error[mask])
+    
+    time_taken = time.time() - st
 
     # print("#### >3.0", np.sum((pred_error > op_thresh)) / np.sum(mask))
     # print("#### EPE", np.mean(pred_error[mask]))
 
 print("#### EPE", pred_mae / len(test_limg))
 print("#### >3.0", pred_op / len(test_limg))
+print("TIME: ",time_taken)
