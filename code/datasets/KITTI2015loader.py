@@ -16,6 +16,35 @@ IMG_EXTENSIONS= [
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
+def kt2015_bench_loader(filepath):
+
+    left_path = os.path.join(filepath, 'image_2')
+    right_path = os.path.join(filepath, 'image_3')
+    # displ_path = os.path.join(filepath, 'disp_occ_0')
+
+    total_name = sorted([name for name in os.listdir(left_path) if name.find('_10') > -1])
+    total_name = [name for name in os.listdir(left_path) if name.find('_10') > -1]
+    train_name = total_name[:160]
+    val_name = total_name[160:]
+
+    train_left = []
+    train_right = []
+    train_displ = []
+    for name in train_name:
+        train_left.append(os.path.join(left_path, name))
+        train_right.append(os.path.join(right_path, name))
+        # train_displ.append(os.path.join(displ_path, name))
+
+    val_left = []
+    val_right = []
+    val_displ = []
+    for name in val_name:
+        val_left.append(os.path.join(left_path, name))
+        val_right.append(os.path.join(right_path, name))
+        # val_displ.append(os.path.join(displ_path, name))
+
+    return train_left, train_right, val_left, val_right
+
 
 def kt2015_loader(filepath):
 

@@ -16,6 +16,35 @@ def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
 
+def kt2012_bench_loader(filepath):
+    left_path = os.path.join(filepath, 'image_0')
+    right_path = os.path.join(filepath, 'image_1')
+    # displ_path = os.path.join(filepath, 'disp_occ')
+
+    total_name = [name for name in os.listdir(left_path) if name.find('_10') > -1]
+    print(total_name)
+    test_name = total_name[:160]
+    val_name = total_name[160:]
+
+    test_left = []
+    test_right = []
+    # train_displ = []
+    for name in test_name:
+        test_left.append(os.path.join(left_path, name))
+        test_right.append(os.path.join(right_path, name))
+        # train_displ.append(os.path.join(displ_path, name))
+
+    val_left = []
+    val_right = []
+    # val_displ = []
+    for name in val_name:
+        val_left.append(os.path.join(left_path, name))
+        val_right.append(os.path.join(right_path, name))
+        # val_displ.append(os.path.join(displ_path, name))
+
+    return test_left, test_right, val_left, val_right
+    
+
 def kt2012_loader(filepath):
 
     left_path = os.path.join(filepath, 'colored_0')

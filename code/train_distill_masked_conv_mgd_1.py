@@ -1,5 +1,6 @@
 '''
 
+
 Code for distilling knowledge with masks
 
 ACVNET -> CGI 
@@ -7,6 +8,8 @@ ACVNET -> CGI
 ACVNET distillation using umaps
 feature distillation done while interpolating the umaps
 only single scale
+
+
 
 '''
 
@@ -26,6 +29,8 @@ import numpy as np
 import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
+
+from torchvision.utils import save_image
 
 # # 
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
@@ -200,7 +205,8 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_lfeat,s_rfeat,s_cvolume,s_conv4,s_conv8 = model(imgL, imgR)
+    disp_ests,s_lfeat,s_rfeat,_,_,_,_ = model(imgL, imgR)
+    #,s_cvolume,s_conv4,s_conv8
     # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
     # sl_feat, sr_feat [1/4,1/8,1/16,1/32]
@@ -212,10 +218,18 @@ def train_sample(sample, compute_metrics=False):
         t_disp_ests,t_lfeat,t_rfeat,t_cvolume,t_conv4,t_conv8,t_umap = t_model(imgL,imgR)
         
     # Left and right 1/4 th feature map
+    # print("Teacher features: ",t_lfeat.size(),t_rfeat.size())
+    
+    # print("Student Features: ")
+    # for i in s_lfeat:
+    #     print(i.size())
+    
+    
 
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     # t_umap full sized
+    # print("t_umap size: ",t_umap.size())
 
     # channel numbers
     # student_channels = s_feat.size()[1]
@@ -225,16 +239,14 @@ def train_sample(sample, compute_metrics=False):
     s_feat_left = align(s_lfeat[0],s_lfeat[0].size()[1],t_lfeat.size()[1])
     s_feat_right = align(s_rfeat[0],s_rfeat[0].size()[1],t_rfeat.size()[1])
 
-    s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
-    s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
+    # s_cvolume = align(s_cvolume,s_cvolume.size()[1],t_cvolume.size()[1])
+    # s_conv4 = align(s_conv4,s_conv4.size()[1],t_conv4.size()[1])
     # s_conv8 = align(s_conv8,s_conv8.size()[1],t_conv8.size()[1])
     
     
     # print("Feat align student , teacher: ",s_feat.size(),t_feat.size())
     # print("Volume align student , teacher: ",s_cvolume.size(),t_cvolume.size())
-    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size())
-    # print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
-
+    # print("Conv4 align student , teacher: ",s_conv4.size(),t_conv4.size()) print("Conv8 align student , teacher: ",s_conv8.size(),t_conv8.size())
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     mask_low = (disp_gt_low < args.maxdisp) & (disp_gt_low > 0)
     masks = [mask, mask_low]
@@ -250,9 +262,9 @@ def train_sample(sample, compute_metrics=False):
     conv8_loss = 0
     
     lambda_feat = 0.001
-    lambda_cvolume = 0.001 
-    lambda_conv4 = 0.001 
-    lambda_conv8 = 0.001 
+    lambda_cvolume = 0
+    lambda_conv4 = 0 
+    lambda_conv8 = 0 
 
     # using default value
     # change according to usecase
@@ -276,6 +288,8 @@ def train_sample(sample, compute_metrics=False):
 
     # align uncertatinty mask
 
+
+
     # #reduce mask to fit student size
     # # print("t_umap size: ",t_umap.size())
     # # t_umap = t_umap.unsqueeze(1)
@@ -294,11 +308,11 @@ def train_sample(sample, compute_metrics=False):
     # # Cost aggregation steps
     # conv4_loss = get_dis_loss_3D(preds_S=s_conv4,preds_T=t_conv4,student_channels=s_conv4.size()[1],teacher_channels=t_conv4.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
 
-    # # t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/8
-    # # conv8_loss = get_dis_loss_3D(preds_S=s_conv8,preds_T=t_conv8,student_channels=s_conv8.size()[1],teacher_channels=t_conv8.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
+    # t_umap = F.interpolate(t_umap, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/8
+    # conv8_loss = get_dis_loss_3D(preds_S=s_conv8,preds_T=t_conv8,student_channels=s_conv8.size()[1],teacher_channels=t_conv8.size()[1],lambda_mgd=lambda_mgd,mask = t_umap) 
 
-    # # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
-    # # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
+    # conv4_loss = KD_deconv4(student=s_conv4,teacher=t_conv4) 
+    # conv8_loss = KD_deconv8(student=s_conv8,teacher=t_conv8) 
 
 
     kd_loss = kd_loss + lambda_feat * feat_loss + lambda_cvolume * cvolume_loss + \
@@ -398,27 +412,29 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
             nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    mat = torch.rand((N,C,1,1)).to(device) 
+    mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
 
     # mask generation
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
 
-    thresh = 0.5
+    thresh = 0.1
 
-    if mask is not None:
-        #reduce mask to fit student size
-        # print("mask size: ",mask.size())
-        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
-        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
-        # print("mask size: ",mask.size())
+    # if mask is not None:
+    #     #reduce mask to fit student size
+    #     # print("mask size: ",mask.size())
+    #     mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
+    #     mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
+    #     # print("mask size: ",mask.size())
 
-        ma = mask.max()
-        mi = mask.min()
-        thr = mi + (ma-mi) * thresh
-        mat  = torch.where(mask > thr, 0, 1).to(device)
+    #     ma = mask.max()
+    #     mi = mask.min()
+    #     thr = mi + (ma-mi) * thresh
+    #     mat  = torch.where(mask > thr, 0, 1).to(device)
         
+    # save_image(mask.float(),'acv/umap.png')
+    # save_image(mat.float(),'acv/mask.png')
     # print("pred and mat size: ",preds_S.size(),mat.size())
     # mask aligned student 
     masked_feat = torch.mul(preds_S, mat)

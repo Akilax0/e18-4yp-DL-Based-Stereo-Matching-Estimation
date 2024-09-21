@@ -342,17 +342,19 @@ class CGI_Stereo(nn.Module):
         #     nn.Conv2d(187, 46, kernel_size=1, padding=0, stride=1, bias=False))
         self.semantic = nn.Sequential(
             BasicConv(1024, 256, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(256, 8, kernel_size=1, padding=0, stride=1, bias=False))
+            nn.Conv2d(256, 48, kernel_size=1, padding=0, stride=1, bias=False))
         
         
-        self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
-        # self.agg = BasicConv(48, 48, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        # self.agg = BasicConv(8, 8, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
+        self.agg = BasicConv(48, 48, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
         # self.agg = BasicConv(64, 64, is_3d=True, kernel_size=(1,5,5), padding=(0,2,2), stride=1)
 
-        self.hourglass_fusion = hourglass_fusion(8)
+        # self.hourglass_fusion = hourglass_fusion(8)
+        self.hourglass_fusion = hourglass_fusion(48)
         # self.hourglass_fusion = hourglass_fusion(64)
-        self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
-        # self.corr_stem = BasicConv(1, 46, is_3d=True, kernel_size=3, stride=1, padding=1)
+
+        # self.corr_stem = BasicConv(1, 8, is_3d=True, kernel_size=3, stride=1, padding=1)
+        self.corr_stem = BasicConv(1, 48, is_3d=True, kernel_size=3, stride=1, padding=1)
         # self.corr_stem = BasicConv(1, 64, is_3d=True, kernel_size=3, stride=1, padding=1)
 
     def forward(self, left, right):

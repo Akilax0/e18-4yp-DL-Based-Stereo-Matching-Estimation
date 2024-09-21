@@ -443,51 +443,51 @@ def align(student,student_channels,teacher_channels):
 def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd=0.15, mask=None):
 
 
-    N, C, H, W = preds_T.shape
+    # N, C, H, W = preds_T.shape
 
-    device = preds_S.device
+    # device = preds_S.device
     
-    # print("device: " ,device)
+    # # print("device: " ,device)
 
-    generation = nn.Sequential(
-            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True), 
-            nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
-
-
-    mat = torch.rand((N,1,H,W)).to(device) 
-    # print("matrix: " ,mat.size())
-
-    # mask generation
-    mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
-    # print("matrix: " ,mat.size())
-
-    # threshold for umaps
-    thresh = 0.50
-
-    if mask is not None:
-        ma = mask.max()
-        mi = mask.min()
-        thr = mi + (ma-mi) * thresh
-        mat  = torch.where(mask > thr, 0, 1).to(device)
-        # Expand mask here 
-        # mat = random_masking(mat)
-        # print("mask comparison: ",mat.size(),mat1.size())
+    # generation = nn.Sequential(
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1),
+    #         nn.ReLU(inplace=True), 
+    #         nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    # mask aligned student 
-    masked_feat = torch.mul(preds_S, mat)
-    # print("masked_feat: " ,masked_feat.size())
+    # mat = torch.rand((N,1,H,W)).to(device) 
+    # # print("matrix: " ,mat.size())
+
+    # # mask generation
+    # mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
+    # # print("matrix: " ,mat.size())
+
+    # # threshold for umaps
+    # thresh = 0.50
+
+    # if mask is not None:
+    #     ma = mask.max()
+    #     mi = mask.min()
+    #     thr = mi + (ma-mi) * thresh
+    #     mat  = torch.where(mask > thr, 0, 1).to(device)
+    #     # Expand mask here 
+    #     # mat = random_masking(mat)
+    #     # print("mask comparison: ",mat.size(),mat1.size())
+
+
+    # # mask aligned student 
+    # masked_feat = torch.mul(preds_S, mat)
+    # # print("masked_feat: " ,masked_feat.size())
     
-    # Genearate feature from student to be compared with teacher
-    new_feat = generation(masked_feat)
-    # print("New feat: " ,new_feat.size())
+    # # Genearate feature from student to be compared with teacher
+    # new_feat = generation(masked_feat)
+    # # print("New feat: " ,new_feat.size())
 
-    # calculate distilation loss
-    # check the implementation here for distillation loss
+    # # calculate distilation loss
+    # # check the implementation here for distillation loss
 
-    dis_loss = F.mse_loss(new_feat,preds_T)
-    # dis_loss = F.mse_loss(preds_S,preds_T)
+    # dis_loss = F.mse_loss(new_feat,preds_T)
+    dis_loss = F.mse_loss(preds_S,preds_T)
     # dis_loss = F.smooth_l1_loss(new_feat,preds_T)
 
     return dis_loss

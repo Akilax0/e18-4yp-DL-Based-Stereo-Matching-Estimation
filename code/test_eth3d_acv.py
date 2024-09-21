@@ -13,6 +13,7 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+import time
 
 # from models import __models__
 from models_acv import __t_models__
@@ -23,7 +24,7 @@ from datasets.readpfm import readPFM
 import cv2
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (ICG-Stereo)')
 parser.add_argument('--model', default='acvnet', help='select a model structure', choices=__t_models__.keys())
@@ -78,7 +79,6 @@ for i in trange(len(all_limg)):
 
     occ_mask = np.ascontiguousarray(Image.open(all_mask[i]))
 
-    st = time.time()
 
     with torch.no_grad():
         # pred_disp  = model(limg_tensor, rimg_tensor)[-1]
@@ -100,7 +100,6 @@ for i in trange(len(all_limg)):
     pred_mae += np.mean(pred_error[mask])
 
     ########save
-    time = time.time() - st
 
     filename = os.path.join('./demo/ETH3D/', all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
     pred_np_save = np.round(predict_np*4 * 256).astype(np.uint16)

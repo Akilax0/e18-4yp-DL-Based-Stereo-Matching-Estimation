@@ -30,6 +30,8 @@ import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
 
+from torchvision.utils import save_image
+
 # # 
 from models import __models__, model_loss_train, model_loss_test,KD_feat_loss,KD_cvolume_loss,KD_deconv8,KD_deconv4
 
@@ -203,7 +205,7 @@ def train_sample(sample, compute_metrics=False):
     disp_gt_low = disp_gt_low.cuda()
     optimizer.zero_grad()
 
-    disp_ests,s_lfeat,s_rfeat = model(imgL, imgR)
+    disp_ests,s_lfeat,s_rfeat,_,_,_,_ = model(imgL, imgR)
     #,s_cvolume,s_conv4,s_conv8
     # print("Student feature map 1/4,volume , 1/4 & 1/8 deconv : ",s_feat.size(),s_cvolume.size(),s_conv4.size(),s_conv8.size())
 
@@ -216,11 +218,18 @@ def train_sample(sample, compute_metrics=False):
         t_disp_ests,t_lfeat,t_rfeat,t_cvolume,t_conv4,t_conv8,t_umap = t_model(imgL,imgR)
         
     # Left and right 1/4 th feature map
+    # print("Teacher features: ",t_lfeat.size(),t_rfeat.size())
+    
+    # print("Student Features: ")
+    # for i in s_lfeat:
+    #     print(i.size())
+    
+    
 
     # print("Teacher feature map 1/4, volume, 1/4 & 1/8 of deconv: ",t_feat.size(),t_cvolume.size(),t_conv4.size(),t_conv8.size())
 
     # t_umap full sized
-    print("t_umap size: ",t_umap.size())
+    # print("t_umap size: ",t_umap.size())
 
     # channel numbers
     # student_channels = s_feat.size()[1]
@@ -253,9 +262,9 @@ def train_sample(sample, compute_metrics=False):
     conv8_loss = 0
     
     lambda_feat = 0.001
-    lambda_cvolume = 0.001 
-    lambda_conv4 = 0.001 
-    lambda_conv8 = 0.001 
+    lambda_cvolume = 0
+    lambda_conv4 = 0 
+    lambda_conv8 = 0 
 
     # using default value
     # change according to usecase
@@ -403,41 +412,43 @@ def get_dis_loss(preds_S, preds_T,student_channels, teacher_channels, lambda_mgd
             nn.Conv2d(teacher_channels, teacher_channels, kernel_size=3, padding=1)).to(device)
 
 
-    mat = torch.rand((N,C,1,1)).to(device) 
+    mat = torch.rand((N,1,H,W)).to(device) 
     # print("matrix: " ,mat.size())
 
     # mask generation
     mat = torch.where(mat < lambda_mgd, 0, 1).to(device)
     # print("matrix: " ,mat.size())
 
-    thresh = 0.5
+    thresh = 0.1
 
-    if mask is not None:
-        #reduce mask to fit student size
-        # print("mask size: ",mask.size())
-        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
-        mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
-        # print("mask size: ",mask.size())
+    # if mask is not None:
+    #     #reduce mask to fit student size
+    #     # print("mask size: ",mask.size())
+    #     mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/2
+    #     mask = F.interpolate(mask, scale_factor=0.5, mode='bilinear', align_corners=False) # 1/4
+    #     # print("mask size: ",mask.size())
 
-        ma = mask.max()
-        mi = mask.min()
-        thr = mi + (ma-mi) * thresh
-        mat  = torch.where(mask > thr, 0, 1).to(device)
+    #     ma = mask.max()
+    #     mi = mask.min()
+    #     thr = mi + (ma-mi) * thresh
+    #     mat  = torch.where(mask > thr, 0, 1).to(device)
         
-    # print("pred and mat size: ",preds_S.size(),mat.size())
-    # mask aligned student 
-    masked_feat = torch.mul(preds_S, mat)
-    # print("masked_feat: " ,masked_feat.size())
+    # # save_image(mask.float(),'acv/umap.png')
+    # # save_image(mat.float(),'acv/mask.png')
+    # # print("pred and mat size: ",preds_S.size(),mat.size())
+    # # mask aligned student 
+    # masked_feat = torch.mul(preds_S, mat)
+    # # print("masked_feat: " ,masked_feat.size())
     
-    # Genearate feature from student to be compared with teacher
-    new_feat = generation(masked_feat)
-    # print("New feat: " ,new_feat.size())
+    # # Genearate feature from student to be compared with teacher
+    # new_feat = generation(masked_feat)
+    # # print("New feat: " ,new_feat.size())
 
     # calculate distilation loss
     # check the implementation here for distillation loss
     # dis_loss = loss_mse(new_feat, preds_T)/N
-    dis_loss = F.mse_loss(new_feat,preds_T)
-    # print("dis_loss : " ,dis_loss.size())
+    # dis_loss = F.mse_loss(new_feat,preds_T)
+    dis_loss = F.mse_loss(preds_S,preds_T)
 
     return dis_loss
 

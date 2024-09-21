@@ -20,7 +20,7 @@ from datasets import KITTI2012loader as kt2012
 # from models import __models__
 from models_acv import __t_models__
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')

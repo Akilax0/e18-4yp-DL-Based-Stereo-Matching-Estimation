@@ -52,7 +52,7 @@ import cv2
 
 from models import __models__
 # from models_acv import __t_models__
-# from models_cgi_resnet_full_rec import __models__
+# from models_cgi_resnet_full_rec import __t_models__
 # from models_cgi_resnet50 import __t_models__
 # from models_cgi_resnet50_fit import __t_models__
 
@@ -88,7 +88,7 @@ def kitti(v,loadckpt):
     test_rimg = all_rimg + test_rimg
     test_ldisp = all_ldisp + test_ldisp
 
-    model = __t_models__[args.model](maxdisp)
+    model = __models__[args.model](maxdisp)
     model = nn.DataParallel(model)
     # model = nn.DataParallel(IGEVStereo(args))
 
@@ -147,7 +147,10 @@ def kitti(v,loadckpt):
 
         op_thresh = 3
         mask = (disp_gt > 0) & (disp_gt < maxdisp)
+        # mask = (predict_np > 0) & (predict_np < maxdisp)
 
+        # matplotlib.image.imsave('kitti_2012_results/'+str(st)+'_pred.png',predict_np)
+        # matplotlib.image.imsave('test_images/mid/gt/'+str(st)+'_gt.png',disp_gt)
         # if v=='2012':
         #     save_image(limg_tensor.float(),'test_images/KITTI2012/images/'+str(st)+'_limg.png')
         #     matplotlib.image.imsave('test_images/KITTI2012/pred/'+str(st)+'_pred.png',predict_np*mask.astype(np.float32))
@@ -162,15 +165,20 @@ def kitti(v,loadckpt):
         # print("Sizes: ",predict_np.size(), mask.size(), disp_gt.size())
         error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
 
-        pred_error = np.abs(predict_np * mask.astype(np.float32) - disp_gt * mask.astype(np.float32))
+        pred_error = np.abs(predict_np *mask.astype(np.float32) - disp_gt)
+
+        print("predict np :",predict_np)
+        print("disp_gt: ", disp_gt*mask.astype(np.float32))
+
         pred_op += np.sum((pred_error > op_thresh)) / np.sum(mask)
         pred_mae += np.mean(pred_error[mask])
 
         # print("#### >3.0", np.sum((pred_error > op_thresh)) / np.sum(mask))
         # print("#### EPE", np.mean(pred_error[mask]))
 
-    # print("#### EPE", pred_mae / len(test_limg))
-    # print("#### >3.0", pred_op / len(test_limg))
+
+    print("#### EPE", pred_mae / len(test_limg))
+    print("#### >3.0", pred_op / len(test_limg))
 
     return pred_mae/len(test_limg) , pred_op / len(test_limg)
 
@@ -241,8 +249,8 @@ def mid(loadckpt):
         mask = (disp_gt <= 0) | (occ_mask != 255) | (disp_gt >= maxdisp)
         # mask = (disp_gt <= 0) | (disp_gt >= args.maxdisp)
 
-        save_image(limg_tensor.float(),'test_images/mid/limages/'+str(st)+'_limg.png')
-        save_image(rimg_tensor.float(),'test_images/mid/rimages/'+str(st)+'_rimg.png')
+        # save_image(limg_tensor.float(),'test_images/mid/limages/'+str(st)+'_limg.png')
+        # save_image(rimg_tensor.float(),'test_images/mid/rimages/'+str(st)+'_rimg.png')
         matplotlib.image.imsave('test_images/mid/pred/'+str(st)+'_pred.png',pred_np)
         matplotlib.image.imsave('test_images/mid/gt/'+str(st)+'_gt.png',disp_gt)
         
@@ -276,7 +284,7 @@ def eth3d(loadckpt):
     all_limg, all_rimg, all_disp, all_mask = et.et_loader(datapath)
 
 
-    model = __t_models__[args.model](maxdisp)
+    model = __models__[args.model](maxdisp)
     model = nn.DataParallel(model)
     model.cuda()
     model.eval()
@@ -370,8 +378,8 @@ if __name__ == '__main__':
     load_20 = args.loadckpt+"checkpoint_000019.ckpt"
     
     # loads = [load_5,load_10,load_15,load_16,load_17,load_18,load_19,load_20]
-    loads = [args.loadckpt]
-    # loads = [load_20]
+    # loads = [args.loadckpt]
+    loads = [load_20]
     
     # print("KITTI 2012 TESTING")
     # kitti_12 = []
@@ -380,19 +388,19 @@ if __name__ == '__main__':
     #     kitti_12.append([kitti('2012',i)])
     #     print(kitti_12[-1])
 
-    # print("KITTI 2015 TESTING")
-    # kitti_15 = []
-    # for i in loads: 
-    #     print("current test ckpt: ",i)
-    #     kitti_15.append([kitti('2015',i)])
-    #     print(kitti_15[-1])
-
-    print("MIDDLEBURY TESTING")
-    mid_res = []
+    print("KITTI 2015 TESTING")
+    kitti_15 = []
     for i in loads: 
         print("current test ckpt: ",i)
-        mid_res.append([mid(i)])
-        print(mid_res[-1])
+        kitti_15.append([kitti('2015',i)])
+        print(kitti_15[-1])
+
+    # print("MIDDLEBURY TESTING")
+    # mid_res = []
+    # for i in loads: 
+    #     print("current test ckpt: ",i)
+    #     mid_res.append([mid(i)])
+    #     print(mid_res[-1])
 
     # print("ETH3D TESTING")
     # eth_res = []
@@ -401,20 +409,20 @@ if __name__ == '__main__':
     #     eth_res.append([eth3d(i)])
     #     print(eth_res[-1])
 
-    print("SAVING RESULTS")
+    # print("SAVING RESULTS")
 
-    with open('test_results.txt', 'w') as f:
-        # Define the data to be written
-        # data = ['This is the first line', 'This is the second line', 'This is the third line']
-        line = "KITTI12_EPE,KITTI12_3.0,KITTI15_EPE,KITTI15_3.0,MID_EPE,MID_2.0,ETH3D_EPE,ETH3D_1.0"
-        f.write(line + '\n')
+    # with open('test_results.txt', 'w') as f:
+    #     # Define the data to be written
+    #     # data = ['This is the first line', 'This is the second line', 'This is the third line']
+    #     line = "KITTI12_EPE,KITTI12_3.0,KITTI15_EPE,KITTI15_3.0,MID_EPE,MID_2.0,ETH3D_EPE,ETH3D_1.0"
+    #     f.write(line + '\n')
 
-        # Use a for loop to write each line of data to the file
-        for i in range(len(loads)):
+    #     # Use a for loop to write each line of data to the file
+    #     for i in range(len(loads)):
             
-            line = str(kitti_12[i][0][0]) + "," + str(kitti_12[i][0][1]) + "," + str(kitti_15[i][0][0]) + "," + str(kitti_15[i][0][1]) + ","+ str(mid_res[i][0][0]) + "," + str(mid_res[i][0][1]) + "," + str(eth_res[i][0][0]) + "," + str(eth_res[i][0][1])
-            f.write(line + '\n')
-            # Optionally, print the data as it is written to the file
-            # print(line)
+    #         line = str(kitti_12[i][0][0]) + "," + str(kitti_12[i][0][1]) + "," + str(kitti_15[i][0][0]) + "," + str(kitti_15[i][0][1]) + ","+ str(mid_res[i][0][0]) + "," + str(mid_res[i][0][1]) + "," + str(eth_res[i][0][0]) + "," + str(eth_res[i][0][1])
+    #         f.write(line + '\n')
+    #         # Optionally, print the data as it is written to the file
+    #         # print(line)
 
 

@@ -15,8 +15,8 @@ import time
 from tensorboardX import SummaryWriter
 from datasets import __datasets__
 # from models_acv import __t_models__, acv_model_loss_train_attn_only, acv_model_loss_train_freeze_attn, acv_model_loss_train, acv_model_loss_test
-# from models import __models__,  model_loss_train, model_loss_test
-from models_cgi_resnet import __models__,  model_loss_train, model_loss_test
+from models import __models__,  model_loss_train, model_loss_test
+# from models_cgi_resnet import __models__,  model_loss_train, model_loss_test
 
 
 from utils import *

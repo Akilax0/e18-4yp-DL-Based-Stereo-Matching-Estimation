@@ -417,4 +417,4 @@ class CGI_Stereo(nn.Module):
             # outputting left and right features , but not used for training
             return [pred_up*4, pred.squeeze(1)*4]
         else:
-            return [pred_up*4],ll,rl,umaps#[pred2_umap]
+            return [pred_up*4],ll,rl,volume,umaps#[pred2_umap]

@@ -29,7 +29,7 @@ from torchvision import transforms
 from datasets import readpfm as rp
 # cudnn.benchmark = True
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
 parser.add_argument('--model', default='acvnet', help='select a model structure', choices=__t_models__.keys())
