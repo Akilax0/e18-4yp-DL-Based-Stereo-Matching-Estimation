@@ -4,6 +4,7 @@ sys.path.append('core')
 
 import os
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+import cv2
 
 import argparse
 import time
@@ -15,6 +16,8 @@ from igev_stereo import IGEVStereo, autocast
 import stereo_datasets as datasets
 from utils.utils import InputPadder
 from PIL import Image
+
+import matplotlib.pyplot as plt
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -174,19 +177,32 @@ def validate_middlebury(model, iters=32, split='F', mixed_prec=False):
     model.eval()
     aug_params = {}
     val_dataset = datasets.Middlebury(aug_params, split=split)
+    dir = '../demo/middlebury/igev/'
+    os.makedirs(dir, exist_ok=True)
 
     out_list, epe_list = [], []
     for val_id in range(len(val_dataset)):
         (imageL_file, _, _), image1, image2, flow_gt, valid_gt = val_dataset[val_id]
+        # print("Val dataset: ",val_dataset[val_id])
+        # print("Image: ",imageL_file)
         image1 = image1[None].cuda()
         image2 = image2[None].cuda()
 
         padder = InputPadder(image1.shape, divis_by=32)
         image1, image2 = padder.pad(image1, image2)
+        
+        # print("Image size : ", type(image1),image1.size())  
+        _,_,w, h = image1.size()
+        wi, hi = (w // 32 + 1) * 32, (h // 32 + 1) * 32
 
         with autocast(enabled=mixed_prec):
             flow_pr = model(image1, image2, iters=iters, test_mode=True)
+
+        pred_np = flow_pr.squeeze().cpu().numpy()
         flow_pr = padder.unpad(flow_pr).cpu().squeeze(0)
+        
+
+        # print("prednp: ",type(flow_pr))
 
         assert flow_pr.shape == flow_gt.shape, (flow_pr.shape, flow_gt.shape)
         epe = torch.sum((flow_pr - flow_gt)**2, dim=0).sqrt()
@@ -203,6 +219,17 @@ def validate_middlebury(model, iters=32, split='F', mixed_prec=False):
         logging.info(f"Middlebury Iter {val_id+1} out of {len(val_dataset)}. EPE {round(image_epe,4)} D1 {round(image_out,4)}")
         epe_list.append(image_epe)
         out_list.append(image_out)
+
+        #######save
+        # print("Image 1:",imageL_file)
+        filename = os.path.join(dir, imageL_file.split('/')[-2]+imageL_file.split('/')[-1])
+        pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        plt.imshow(pred_np_save, cmap='inferno')
+        plt.axis('off')
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close()
+        
+        
 
     epe_list = np.array(epe_list)
     out_list = np.array(out_list)

@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from models_igev.core.utils.utils import bilinear_sampler
+# from models_igev.core.utils.utils import bilinear_sampler
+from core.utils.utils import bilinear_sampler
 
 
 class Combined_Geo_Encoding_Volume:
