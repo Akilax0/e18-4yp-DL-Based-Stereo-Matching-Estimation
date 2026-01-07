@@ -24,6 +24,7 @@ from datasets.readpfm import readPFM
 import cv2
 
 
+import matplotlib.pyplot as plt
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (ICG-Stereo)')
@@ -44,7 +45,8 @@ model = nn.DataParallel(model)
 model.cuda()
 model.eval()
 
-os.makedirs('./demo/ETH3D/', exist_ok=True)
+dir = './demo/ETH3D/igev_direct/'
+os.makedirs(dir, exist_ok=True)
 
 state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
@@ -99,9 +101,14 @@ for i in trange(len(all_limg)):
 
     ########save
 
-    filename = os.path.join('./demo/ETH3D/', all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
+    filename = os.path.join(dir, all_limg[i].split('/')[-2]+all_limg[i].split('/')[-1])
     pred_np_save = np.round(predict_np*4 * 256).astype(np.uint16)
-    cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
+
+    plt.imshow(pred_np_save, cmap='inferno')
+    plt.axis('off')
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()
+    # cv2.imwrite(filename, cv2.applyColorMap(cv2.convertScaleAbs(pred_np_save, alpha=0.01),cv2.COLORMAP_JET), [int(cv2.IMWRITE_PNG_COMPRESSION), 0])
 
 
 print(pred_mae / len(all_limg))

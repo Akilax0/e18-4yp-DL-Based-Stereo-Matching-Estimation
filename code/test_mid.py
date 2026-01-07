@@ -50,7 +50,7 @@ state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
 model.eval()
 
-dir = './demo/middlebury/igev_mgd/'
+dir = './demo/middlebury/gt/'
 
 os.makedirs(dir, exist_ok=True)
 
@@ -111,9 +111,15 @@ def test_trainset():
         #######save
 
         filename = os.path.join(dir, limg_path.split('/')[-2]+limg_path.split('/')[-1])
-        pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        # pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        # pred_disp = limg_tensor[:, hi - h:, wi - w:]
+        # print("pred_disp: ",pred_disp)
+        # pred_np = pred_disp.cpu().numpy()
+        # print("pred_np: ",pred_np)
+        # pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        # print("pred_np_save:",pred_np_save)
         
-        plt.imshow(pred_np_save, cmap='inferno')
+        plt.imshow(disp_gt, cmap='inferno')
         plt.axis('off')
         plt.savefig(filename, bbox_inches='tight', pad_inches=0)
         plt.close()

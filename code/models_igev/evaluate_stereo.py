@@ -3,7 +3,7 @@ import sys
 sys.path.append('core')
 
 import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import cv2
 
 import argparse
@@ -28,6 +28,8 @@ def validate_eth3d(model, iters=32, mixed_prec=False):
     model.eval()
     aug_params = {}
     val_dataset = datasets.ETH3D(aug_params)
+    dir = '../demo/ETH3D/igev/'
+    os.makedirs(dir, exist_ok=True)
 
     out_list, epe_list = [], []
     for val_id in range(len(val_dataset)):
@@ -38,9 +40,19 @@ def validate_eth3d(model, iters=32, mixed_prec=False):
         padder = InputPadder(image1.shape, divis_by=32)
         image1, image2 = padder.pad(image1, image2)
 
+        # print("Image size : ", type(image1),image1.size())  
+        _,_,w, h = image1.size()
+        wi, hi = (w // 32 + 1) * 32, (h // 32 + 1) * 32
+
+        
         with autocast(enabled=mixed_prec):
             flow_pr = model(image1, image2, iters=iters, test_mode=True)
-        flow_pr = padder.unpad(flow_pr.float()).cpu().squeeze(0)
+
+        pred_np = flow_pr.squeeze().cpu().numpy()
+        flow_pr = padder.unpad(flow_pr).cpu().squeeze(0)
+
+        # flow_pr = padder.unpad(flow_pr.float()).cpu().squeeze(0)
+        #
         assert flow_pr.shape == flow_gt.shape, (flow_pr.shape, flow_gt.shape)
         epe = torch.sum((flow_pr - flow_gt)**2, dim=0).sqrt()
 
@@ -59,11 +71,22 @@ def validate_eth3d(model, iters=32, mixed_prec=False):
         epe_list.append(image_epe)
         out_list.append(image_out)
 
+        #######save
+        # print("Image 1:",imageL_file)
+        filename = os.path.join(dir, imageL_file.split('/')[-2]+imageL_file.split('/')[-1])
+        pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        plt.imshow(pred_np_save, cmap='inferno')
+        plt.axis('off')
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close()
+
     epe_list = np.array(epe_list)
     out_list = np.array(out_list)
 
     epe = np.mean(epe_list)
     d1 = 100 * np.mean(out_list)
+    
+
 
     print("Validation ETH3D: EPE %f, D1 %f" % (epe, d1))
     return {'eth3d-epe': epe, 'eth3d-d1': d1}
@@ -77,22 +100,32 @@ def validate_kitti(model, iters=32, mixed_prec=False):
     val_dataset = datasets.KITTI(aug_params, image_set='training')
     torch.backends.cudnn.benchmark = True
 
+    dir = '../demo/kitti2015/igev/'
+    os.makedirs(dir, exist_ok=True)
+
     out_list, epe_list, elapsed_list = [], [], []
     for val_id in range(len(val_dataset)):
-        _, image1, image2, flow_gt, valid_gt = val_dataset[val_id]
+        (imageL_file, imageR_file, GT_file),image1, image2, flow_gt, valid_gt = val_dataset[val_id]
         image1 = image1[None].cuda()
         image2 = image2[None].cuda()
 
         padder = InputPadder(image1.shape, divis_by=32)
         image1, image2 = padder.pad(image1, image2)
 
+        # print("Image size : ", type(image1),image1.size())  
+        _,_,w, h = image1.size()
+        wi, hi = (w // 32 + 1) * 32, (h // 32 + 1) * 32
+
         with autocast(enabled=mixed_prec):
             start = time.time()
             flow_pr = model(image1, image2, iters=iters, test_mode=True)
             end = time.time()
 
+
         if val_id > 50:
             elapsed_list.append(end-start)
+        pred_np = flow_pr.squeeze().cpu().numpy()
+        # flow_pr = padder.unpad(flow_pr).cpu().squeeze(0)
         flow_pr = padder.unpad(flow_pr).cpu().squeeze(0)
 
         assert flow_pr.shape == flow_gt.shape, (flow_pr.shape, flow_gt.shape)
@@ -109,6 +142,15 @@ def validate_kitti(model, iters=32, mixed_prec=False):
             logging.info(f"KITTI Iter {val_id+1} out of {len(val_dataset)}. EPE {round(image_epe,4)} D1 {round(image_out,4)}. Runtime: {format(end-start, '.3f')}s ({format(1/(end-start), '.2f')}-FPS)")
         epe_list.append(epe_flattened[val].mean().item())
         out_list.append(out[val].cpu().numpy())
+
+        #######save
+        # print("Image 1:",imageL_file)
+        filename = os.path.join(dir, imageL_file.split('/')[-2]+imageL_file.split('/')[-1])
+        pred_np_save = np.round(pred_np * 256).astype(np.uint16)        
+        plt.imshow(pred_np_save, cmap='inferno')
+        plt.axis('off')
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+        plt.close()
 
     epe_list = np.array(epe_list)
     out_list = np.concatenate(out_list)

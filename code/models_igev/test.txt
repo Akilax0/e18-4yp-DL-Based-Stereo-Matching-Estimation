@@ -1,1 +1,4 @@
 Validation Scene Flow: 0.479204, 2.475807
+Validation Scene Flow: 0.479192, 2.475811
+Validation Scene Flow: 0.479155, 2.475774
+Validation Scene Flow: 0.479179, 2.475795

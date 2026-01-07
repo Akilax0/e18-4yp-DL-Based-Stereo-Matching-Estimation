@@ -60,10 +60,15 @@ state_dict = torch.load(args.loadckpt)
 model.load_state_dict(state_dict['model'])
 
 
+dir = './demo/kitti2015/gt/'
+os.makedirs(dir, exist_ok=True)
 
 pred_mae = 0
 pred_op = 0
 for i in trange(len(test_limg)):
+    
+    limg_path = test_limg[i]
+
     limg = Image.open(test_limg[i]).convert('RGB')
     rimg = Image.open(test_rimg[i]).convert('RGB')
 
@@ -112,6 +117,16 @@ for i in trange(len(test_limg)):
 
     # print("#### >3.0", np.sum((pred_error > op_thresh)) / np.sum(mask))
     # print("#### EPE", np.mean(pred_error[mask]))
+    #
+    #######save
+
+    filename = os.path.join(dir, limg_path.split('/')[-2]+limg_path.split('/')[-1])
+    pred_np_save = np.round(predict_np * 256).astype(np.uint16)        
+    
+    plt.imshow(disp_gt, cmap='inferno')
+    plt.axis('off')
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+    plt.close()
 
 print("#### EPE", pred_mae / len(test_limg))
 print("#### >3.0", pred_op / len(test_limg))

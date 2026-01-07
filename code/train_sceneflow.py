@@ -21,7 +21,7 @@ import gc
 
 cudnn.benchmark = True
 #os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 parser = argparse.ArgumentParser(description='Accurate and Real-Time Stereo Matching via Context and Geometry Interaction (CGI-Stereo)')
 parser.add_argument('--model', default='CGI_Stereo', help='select a model structure', choices=__models__.keys())
@@ -203,7 +203,7 @@ def test_sample(sample, compute_metrics=True):
     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
     masks = [mask]
     disp_gts = [disp_gt]
-    loss = model_loss_test(disp_ests, disp_gts, mask)
+    loss = model_loss_test(disp_ests, disp_gts, masks)
 
     scalar_outputs = {"loss": loss}
     # image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
